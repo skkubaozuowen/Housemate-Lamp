@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { schema, instructions, validateAnalysis } from './emotion.js';
+import { isSameOrigin, listenHost } from './deployment.js';
 const root = new URL('./', import.meta.url);
 const port = Number(process.env.PORT || 3000);
 const model = process.env.OPENAI_MODEL || 'gpt-6-sol';
@@ -25,7 +26,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (req.method !== 'POST' || req.url !== '/api/chat') return json(res, 404, { error: 'Not found' });
-  if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}`) return json(res, 403, { error: 'Origin not allowed' });
+  if (!isSameOrigin(req.headers.origin, req.headers.host)) return json(res, 403, { error: 'Origin not allowed' });
   const controller = new AbortController();
   res.on('close', () => { if (!res.writableEnded) controller.abort(); });
   try {
@@ -58,4 +59,5 @@ const server = http.createServer(async (req, res) => {
     json(res, 503, { error: error.message.startsWith('Add your API') ? error.message : 'Could not reach AI. Please check your connection and try again.' });
   }
 });
-server.listen(port, '127.0.0.1', () => console.log(`Housemate: http://localhost:${port} (${model})`));
+const host = listenHost(process.env);
+server.listen(port, host, () => console.log(`Housemate listening on ${host}:${port} (${model})`));

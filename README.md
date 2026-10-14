@@ -29,3 +29,7 @@ Node.js 20+，无需安装依赖。将密钥放在项目目录的 `API Key.txt`�
 ## Bright English interface
 
 The page uses a full-screen white canvas with softly blurred, animated light colors. UI labels and AI replies/reflections are English, including for Chinese input; users can type in either language. Internal schema enums remain Chinese for compatibility and are translated for display. Brief replies and emotion tags stay visible; reflection text is collapsed by default. There is no dark chat panel. Sadness and loneliness use a bright blue/lavender palette, rest uses peach light, joy uses gold, and combined emotions continue to overlap.
+
+## Railway deployment
+
+Connect `skkubaozuowen/Housemate-Lamp`, branch `codex/housemate`. Use the repository root and start command `npm start`. Set `OPENAI_API_KEY` in Railway service Variables (never commit the key file). Optional: `OPENAI_MODEL=gpt-6-sol`. Railway provides `PORT`; when present the server listens on `0.0.0.0`. The same-origin check accepts the public HTTPS origin behind Railway's TLS proxy. After deployment, use Railway's assigned public domain to open the page from a phone.
