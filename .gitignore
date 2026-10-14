@@ -1,0 +1,16 @@
+API Key.txt
+.env
+node_modules/
+*.log
+
+# Local credentials and OS files
+*API*Key*.txt
+.env.*
+.DS_Store
+
+# Older local previews
+preview.png
+working-chat.png
+emotion-preview.png
+light-preview.png
+mixed-emotions-preview.png
