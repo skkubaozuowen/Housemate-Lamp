@@ -79,3 +79,25 @@ input.addEventListener('input',count);
 input.addEventListener('keydown',event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); form.requestSubmit(); } });
 document.querySelectorAll('.examples button').forEach(button => button.addEventListener('click',() => { if(active) return; input.value = button.textContent; count(); input.focus(); }));
 clear.addEventListener('click',() => { if(active) { active.abort(); return; } history = []; setLight(null); messages.replaceChildren(welcome); input.value = ''; count(); input.focus(); });
+
+// Follow the visible viewport so the phone keyboard does not cover the composer.
+const phoneLayout = window.matchMedia('(max-width: 600px)');
+function syncPhoneViewport() {
+  const viewport = window.visualViewport;
+  if (!phoneLayout.matches) {
+    document.documentElement.style.removeProperty('--mobile-height');
+    document.body.classList.remove('keyboard-open');
+    return;
+  }
+  // Preserve browser zoom for accessibility.
+  if (viewport && viewport.scale > 1.05) return;
+  const height = viewport?.height || window.innerHeight;
+  document.documentElement.style.setProperty('--mobile-height', `${height}px`);
+  const focused = document.activeElement === input;
+  document.body.classList.toggle('keyboard-open', focused && (window.innerHeight - height > 100 || height < 500));
+}
+window.visualViewport?.addEventListener('resize', syncPhoneViewport);
+window.addEventListener('resize', syncPhoneViewport);
+input.addEventListener('focus', syncPhoneViewport);
+input.addEventListener('blur', syncPhoneViewport);
+syncPhoneViewport();
