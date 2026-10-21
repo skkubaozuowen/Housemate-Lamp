@@ -44,11 +44,16 @@ function primitiveScene(primitive,{p,clock,phase,amp,energy,type}) {
         addField(scene,.58,.99+Math.sin(drift*.6)*amp*.1,.3,.22,2,base*.32);
       }
       break;
-    case 'pass':
-      restingFields(scene,phase,0,base*.38);
-      addStroke(scene,mix(-.4,1.18,open),.62,mix(-.16,1.42,open),.56,.105,0,base*1.05*Math.sin(Math.PI*p));
-      addField(scene,mix(-.34,1.24,open),.63,.16,.1,1,base*.45*Math.sin(Math.PI*p));
+    case 'pass': {
+      // Receipt is one soft local nod, with no rigid length or cross-screen pass.
+      const bloom=Math.sin(Math.PI*p)**2,spread=bloom*amp;
+      const x=.46+Math.sin(Math.PI*p)*amp*.035,y=.59-Math.sin(Math.PI*p)*amp*.065;
+      restingFields(scene,phase,0,base*.43);
+      addField(scene,x,y,.2+spread*.15,.22+spread*.15,0,base*.95*bloom);
+      addField(scene,x+amp*.1,y+amp*.07,.23+spread*.13,.24+spread*.1,1,base*.6*bloom);
+      addField(scene,x-amp*.07,y-amp*.06,.21+spread*.1,.23+spread*.12,2,base*.32*bloom);
       break;
+    }
     case 'expand': {
       if(type==='encourage') {
         restingFields(scene,phase,0,base*.35);
@@ -142,16 +147,16 @@ function primitiveScene(primitive,{p,clock,phase,amp,energy,type}) {
       break;
     }
     case 'interrupt_return': {
-      restingFields(scene,phase,0,base*.38);
-      let x,strength=1;
-      if(p<.36) x=mix(.1,.79,ease(p/.36));
-      else if(p<.5) {x=.79;strength=.16;}
-      else x=mix(.79,.13,ease((p-.5)/.5));
-      addField(scene,x,.55,.16,.15,0,base*1.1*strength);
-      if(p>=.36&&p<.5) {
-        addStroke(scene,.28,.56,.43,.56,.065,1,base*.55);
-        addStroke(scene,.63,.56,.77,.56,.065,1,base*.55);
-      } else addStroke(scene,clamp(x-.24,.08,.78),.56,x,.56,.065,1,base*.65);
+      // A continuous light cloud hesitates and returns along a curved path.
+      // Diffusion marks the pause without broken lines or an abrupt dark flash.
+      const outward=ease(p/.4),returning=ease((p-.58)/.42),reach=outward*(1-returning);
+      const hesitation=ease((p-.3)/.12)*(1-ease((p-.56)/.2));
+      const x=.35+amp*.38*reach;
+      const y=.6-amp*.22*reach-amp*.08*Math.sin(Math.PI*outward)*(1-returning)+amp*.06*Math.sin(Math.PI*returning);
+      restingFields(scene,phase,0,base*.44);
+      addField(scene,x,y,.21+amp*.1*hesitation,.23+amp*.08*hesitation,0,base*.95*(1-.22*hesitation));
+      addField(scene,x-amp*.085,y+amp*.075,.25+amp*.08*hesitation,.26+amp*.07*hesitation,1,base*.56);
+      addField(scene,x+amp*.065,y-amp*.055,.23,.25,2,base*.28);
       break;
     }
     case 'local_echo': {

@@ -4,7 +4,7 @@ export const NEXT_STATES = Object.freeze(['idle', 'hold', 'waiting', 'accompany'
 
 const definitions = [
   ['B01','idle','Idle','待机','대기','Slow color fields wander along the edges.','Space and very slow drift may suggest availability without asking for attention.','lilac_blush','slow_drift',.25,.23,.38,14000,true,1000,'idle',false],
-  ['B02','acknowledge','Received','接收确认','수신 확인','A single short band passes through a local area.','A local pass can mark receipt without agreement.','lilac_blush','pass',.42,1.1,.6,850,false,200,'hold',false],
+  ['B02','acknowledge','Received','接收确认','수신 확인','One soft cloud blooms locally, lifts slightly and settles.','A single local light nod may mark receipt without agreement.','lilac_blush','pass',.42,1.1,.6,1200,false,260,'hold',false],
   ['B03','processing','Processing','处理中','처리 중','Two compact color fields orbit while a request is pending.','A small continuous loop may distinguish pending work from a completed response.','sea_glass','converge',.4,.7,.55,1800,true,350,'hold',false],
   ['B04','greet','Welcome','问候','인사','One open arc travels outward from the side.','A single outward opening may be read as welcoming.','peach_amber','expand',.5,.75,.78,2200,false,650,'idle',false],
   ['B05','affirm','Accept','肯定','긍정','Two fields meet and form a clear shared area.','Joining and a visible completion point may communicate acceptance of a known choice.','sea_glass','converge',.5,.8,.75,1600,false,500,'hold',false],
@@ -14,7 +14,7 @@ const definitions = [
   ['B09','notify','Gentle notice','轻度提醒','주의 환기','Two local halos appear in succession, then stop.','Two limited increases may be noticeable without becoming an alarm.','peach_amber','local_echo',.58,.75,.6,2200,false,450,'hold',false],
   ['B10','complete','Complete','完成确认','완료 확인','Three areas dock together below the center.','Consolidation may make the end of a small interaction legible.','sage_cream','converge',.46,.65,.7,1800,false,600,'hold',false],
   ['B11','farewell','Farewell','告别','작별','Color slowly returns to the edges and the base field.','A slow retreat may suggest closure while remaining available.','rose_lavender','separate',.32,.36,.7,3300,false,950,'idle',false],
-  ['B12','error','Retry','系统异常','오류 알림','A flowing band has one visible break and returns.','An interruption and reversal may distinguish failure from an intentional refusal.','coral_clay','interrupt_return',.46,.8,.72,2100,false,350,'waiting',true],
+  ['B12','error','Retry','系统异常','오류 알림','A soft cloud follows a short arc, hesitates and gently returns.','A hesitation and return may distinguish a retry from an intentional refusal.','coral_clay','interrupt_return',.46,.8,.72,2600,false,420,'waiting',true],
   ['R01','empathize','Receive a feeling','共情承接','공감 표현','A pause, then separated areas gradually find a connection.','A pause and gradual connection may acknowledge a feeling without endorsing its content.','mauve_sand','blend',.4,.38,.7,5200,false,1000,'hold',false],
   ['R02','accompany','Stay together','安静陪伴','조용한 동행','Wide, slow, continuous bands remain present.','A continuous broad rhythm may offer company when explicitly invited.','mist_blue','slow_drift',.4,.28,.62,8500,true,1200,'accompany',false],
   ['R03','soothe','Ease into quiet','尝试安抚','안정 지원','Slightly irregular movement becomes organized and slow.','Moving toward regularity is an optional calming attempt, not a health claim.','sea_glass','settle',.43,.4,.72,6800,false,1100,'hold',false],

@@ -62,6 +62,23 @@ test('the favorite three-ripple celebration remains byte-for-byte unchanged',()=
   for(const [elapsed,hash] of baseline)assert.equal(createHash('sha256').update(renderFrame(plan,elapsed,{colors})).digest('hex'),hash,`celebration at ${elapsed}ms`);
 });
 
+test('receipt and retry stay soft through their brightness and direction changes',()=>{
+  for(const type of ['acknowledge','error'])for(const amplified of [false,true]) {
+    const plan=createPlan(type,{seed:4589,...(amplified?{energy:1,amplitude:1,speed:2}:{})});
+    const frames=Math.ceil(plan.durationMs/(1000/60));
+    let previous=renderFrame(plan,0);
+    for(let i=1;i<=frames;i++) {
+      const frame=renderFrame(plan,plan.durationMs*i/frames);
+      // Guard the former abrupt retry dim/reappearance at phase boundaries.
+      // Check the displayed RGB, including controls at their strongest setting.
+      const changes=Array.from(frame,(value,index)=>Math.abs(value-previous[index]));
+      assert.ok(Math.max(...changes)<=12,`${type} must not pop between adjacent 60 Hz frames`);
+      assert.ok(changes.reduce((sum,value)=>sum+value,0)/frame.length<=2,`${type} must not flash across the field`);
+      previous=frame;
+    }
+  }
+});
+
 test('finite scenes stop and hold; reduced-motion scenes do not keep drifting',()=>{
   for(const type of RESPONSE_TYPES.filter(type=>!CATALOG[type].loop)) {
     const plan=fixed(type);

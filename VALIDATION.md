@@ -80,3 +80,14 @@ This section supersedes v2.0.1's automatic keeping of a requested color. `npm te
 - Phone viewport 390 × 844: accompaniment preview, text, input and footer remain visible with document width 390 and no horizontal overflow. Desktop layout remains unchanged. This is browser viewport simulation, not a physical phone test.
 - Captured `/private/tmp/housemate-v2.1-brighter-empathy.png`, `/private/tmp/housemate-v2.1-processing.png`, `/private/tmp/housemate-v2.1-soothe.png` and `/private/tmp/housemate-v2.1-phone.png`. The animated overview `/private/tmp/housemate-motion-overview.gif` renders actual 16×16 RGB frames for all 20 default scenes at real timing; it is a source-frame comparison, not a recording of controller transitions.
 - At the user's request the `housemate` Railway heartbeat was set to **PAUSED**. This visual revision was tested locally; no Railway deployment was attempted.
+
+## Softer receipt and retry · 2026-10-22 · v2.1.1
+
+`npm test`: **66 passed, 0 failed**, including HTTP integration. Renderer/catalog syntax checks and `git diff --check` passed.
+
+- B02 replaces the cross-screen capsule with overlapping round Gaussian fields: one local bloom, a slight upward nod and a soft fade. Its duration is 1.2 seconds with a 260 ms transition, giving the receipt more room than the previous 850 ms pass.
+- B12 replaces broken strokes and the sudden strength drop with a continuous light cloud. It curves outward, diffuses during a short hesitation and returns on a gentle arc. Its duration is 2.6 seconds with a 420 ms transition. Retry, waiting and fallback behavior remain covered by controller/API tests.
+- A new displayed-RGB continuity regression checks adjacent 60 Hz frames at defaults and maximum energy/amplitude/speed. Each pixel channel must change by no more than 12 and the average field change by no more than 2 per frame. This guards abrupt dimming or reappearance, rather than asserting implementation-specific shapes.
+- Independent read-only review checked continuity at the hesitation/return boundaries, finite endpoint freeze and reduced-motion stillness. The existing exact Celebrate reference hashes and response-pair distinction checks pass.
+- Actual in-app Chromium previews verified B02 and B12 plan JSON, durations and soft diffused compositions. Screenshots: `/private/tmp/housemate-soft-b02-browser.png` and `/private/tmp/housemate-soft-b12-browser.png`. `/private/tmp/housemate-soft-signals.gif` compares their actual 16×16 RGB frames at original playback speed; it is a source-frame preview, not a controller-transition recording.
+- Local server restarted with v2.1.1. The Railway heartbeat remains paused; no Railway deployment was attempted.

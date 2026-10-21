@@ -37,7 +37,7 @@ Version 2.1 gives each response a more distinct path, composition and rhythm, wi
 | ID | Internal name | Signature / ending |
 | --- | --- | --- |
 | B01 | idle | Slow edge wandering; stays available |
-| B02 | acknowledge | One short slanted pass; receipt without agreement |
+| B02 | acknowledge | One local cloud blooms and lifts slightly; receipt without agreement |
 | B03 | processing | Two compact orbiting fields only while a real request is pending |
 | B04 | greet | One outward open arc; returns to idle |
 | B05 | affirm | Two sides join through a visible bridge; accepts a known choice |
@@ -47,7 +47,7 @@ Version 2.1 gives each response a more distinct path, composition and rhythm, wi
 | B09 | notify | Two local halos; ends |
 | B10 | complete | Three regions dock together below the center |
 | B11 | farewell | Slow retreat into the base; returns to idle |
-| B12 | error | One interruption and return; retry available |
+| B12 | error | Soft cloud curves outward, hesitates and returns; retry available |
 | R01 | empathize | Pause, then regions approach with a connecting stroke; holds |
 | R02 | accompany | Traveling parallel breathing bands; continues when invited |
 | R03 | soothe | Irregular angled flow settles into horizontal bands; holds |
