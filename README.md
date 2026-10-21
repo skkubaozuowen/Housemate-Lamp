@@ -1,35 +1,102 @@
-# Housemate · 文字情绪原型
+# Housemate Lamp · Light as a response
 
-独立网页，使用 Node.js + 原生 HTML/CSS/JavaScript。当前不连接灯或其他设备。
+Node.js + plain HTML/CSS/JavaScript prototype for a diffused **16 × 16 RGB** lamp. Type a moment; the lamp answers with color relationships, spatial motion, timing and closure. The everyday page shows no AI reply paragraphs, emotion tags or interpretation cards.
 
-## 运行
+## Run
 
-Node.js 20+，无需安装依赖。将密钥放在项目目录的 `API Key.txt`，运行 `npm start`，打开 http://localhost:3000。
+Node.js 20 or newer; no third-party dependencies or build step.
 
-默认模型 `gpt-6-sol`，可用 `OPENAI_MODEL` 和 `PORT` 环境变量修改。密钥只由服务端读取，静态资源采用白名单，不会把密钥文件提供给浏览器。
+```sh
+npm start
+```
 
-## 使用
+Open http://localhost:3000. Open **Light study** at the bottom for the research drawer, or use http://localhost:3000/?research=1. The same page works on phones; its input follows the visible viewport when the keyboard opens.
 
-输入文字，回车或点击“听听我的心情”。Shift+Enter 换行。按钮可停止分析。“重新开始”清空当前对话；分析中点击则先停止本次分析。
+```sh
+npm test
+```
 
-返回主要情绪、次要情绪、表达强度、线索清晰程度、表达类型、原文依据、简短解释与回应。可以直接纠正 AI 的解读。信息不足时应返回“不明确”，不会把每句问候或命令强行归为一种情绪。
+Checks use Node's built-in test runner. They cover semantic priority, schema validation, request cancellation and stale results, session reset, local fallback, RGB frames, paused/hidden time and the one-render-loop contract. Browser QA and its limits are recorded in [VALIDATION.md](VALIDATION.md).
 
-情绪标签是对文字的推测，不是心理诊断。每次发送最近 5 轮上下文给 OpenAI，使用 Responses API 的严格 JSON schema，服务端校验依据是否来自本次原文。请求设置 store:false；应用自身不写入对话日志或数据库，对话仅存在当前页面内存，刷新后消失。OpenAI 侧的数据处理依账户及服务政策而定。
+## AI and local demo
 
-## 检查
+Use the existing ignored `API Key.txt`, or set `OPENAI_API_KEY` on the server. The key is never sent to the browser. `OPENAI_MODEL` defaults to the existing `gpt-6-sol`; `PORT` and `HOST` configure listening. Railway's `PORT` binds to `0.0.0.0` automatically.
 
-`node --test test/emotion.test.js`
+The OpenAI Responses API returns a strict, bounded light plan, **not prose**. See [official Structured Outputs documentation](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses). All enums, numeric bounds, refusal, incomplete output, malformed JSON, timeout and upstream failure are handled. Model parameters are constrained again by local session preferences. `store:false` is used.
 
-## 网页光影模拟
+With no key, the page clearly labels **Local demo** and runs the same planner format and renderer entirely in the browser. Choose Local demo in Light study even when a key is configured. Local rules recognize representative Chinese, English and Korean phrases; this is a demonstration of known interaction routes, not unrestricted language understanding. Explicit boundaries, corrections, greetings and thanks are routed locally even in AI mode. Other messages use AI with up to ten prior user turns and validated light context.
 
-情绪分析成功后，页面外围光晕用 4 秒渐变切换。开心为暖金，平静为浅绿；疲惫、难过、孤独为较暗暖光；焦虑、生气为稳定柔光；复杂为交融光色；不明确恢复默认微光。各场景以 19–46 秒周期缓慢流动。分析中、取消及失败时保留上一次场景，“重新开始”恢复默认。可暂停流动，颜色仍能响应情绪；系统开启减少动态效果时禁用动画与渐变。不控制任何实体设备。
+On AI failure the light plays a separate interrupted-return gesture, offers **Retry AI**, and continues with a valid local response. The study drawer includes a no-network failure simulation to exercise this exact presentation path. It is not a timed reminder service.
 
-情境理解支持从生日、团聚等事件推测情绪，并用“需要确认”标注隐含感受。会保留转折句里的共存情绪，同时尊重用户明确的否定和更正。幸福使用暖金光，忧郁使用蓝紫光；光影同时读取主要和次要情绪，在不同区域交融，不再只呈现主要情绪。
+## Response library
 
-## Bright English interface
+All 20 responses can be previewed without AI. Each catalog entry includes a design hypothesis, not a claim of proven comprehension.
 
-The page uses a full-screen white canvas with softly blurred, animated light colors. UI labels and AI replies/reflections are English, including for Chinese input; users can type in either language. Internal schema enums remain Chinese for compatibility and are translated for display. Brief replies and emotion tags stay visible; reflection text is collapsed by default. There is no dark chat panel. Sadness and loneliness use a bright blue/lavender palette, rest uses peach light, joy uses gold, and combined emotions continue to overlap.
+| ID | Internal name | Signature / ending |
+| --- | --- | --- |
+| B01 | idle | Very slow drift; stays available |
+| B02 | acknowledge | One short local pass; receipt without agreement |
+| B03 | processing | Restrained local loop only while a real request is pending |
+| B04 | greet | One outward wave; returns to idle |
+| B05 | affirm | Two regions join; accepts a known choice |
+| B06 | decline | Regions separate and settle |
+| B07 | clarify | Two regions alternate once; waits still |
+| B08 | wait | Movement comes to rest; leaves room |
+| B09 | notify | Two local increases; ends |
+| B10 | complete | Dispersed regions consolidate |
+| B11 | farewell | Slow retreat into the base; returns to idle |
+| B12 | error | One interruption and return; retry available |
+| R01 | empathize | Pause, then regions gradually connect; holds |
+| R02 | accompany | Broad low-frequency bands; continues when invited |
+| R03 | soothe | Irregularity becomes organized; holds |
+| R04 | encourage | Progressive directional expansion; supports an upcoming action |
+| R05 | celebrate | Three controlled openings; brief, then idle |
+| R06 | receive_thanks | Small local return in the same palette; restores prior stable state |
+| R07 | withdraw | Motion diminishes to stillness; preserves color |
+| R08 | repair | Interrupts and changes parameters; remembers session feedback |
 
-## Railway deployment
+A negative self-judgment routes to empathize, never agreement. General knowledge and unknowable future outcomes route to clarify rather than arbitrary yes/no. An explicit request for solitude takes priority over anxiety or other emotion words. Thanks after withdrawal returns to stillness. Returning or inviting company can start interaction again.
 
-Connect `skkubaozuowen/Housemate-Lamp`, branch `codex/housemate`. Use the repository root and start command `npm start`. Set `OPENAI_API_KEY` in Railway service Variables (never commit the key file). Optional: `OPENAI_MODEL=gpt-6-sol`. Railway provides `PORT`; when present the server listens on `0.0.0.0`. The same-origin check accepts the public HTTPS origin behind Railway's TLS proxy. After deployment, use Railway's assigned public domain to open the page from a phone.
+## Light study / workshop
+
+The drawer is closed by default. It provides:
+
+- Twenty direct previews, replay and hold; design hypothesis for each response.
+- Eleven palette families × misted / balanced / accented variations, one to four visible colors and a reproducible seed.
+- Primitive, flow speed, amplitude, energy, duration, loop and color transition controls.
+- Diffusion / crisp matrix view. Both consume the same **768-byte RGB frame**; the matrix is not a downsampled screenshot.
+- Palette lock and release; session scenes with restore; current plan copy/export.
+- Session-only likes, dislikes and suggested changes, exported only when requested. Exports include settings and intentionally entered workshop notes; conversation text is never automatically attached.
+- AI/demo selection and simulated request failure.
+
+Explicit color dislikes override palette locks and avoid that hue family in later choices. Motion feedback affects later plans. A short thanks preserves color. New moment cancels requests and invalidates late responses, clears text, preferences, scene memories and workshop notes. No database, account, analytics SDK, microphone or hardware permission is required. Refreshing closes the session; nothing is written to localStorage.
+
+## Code boundaries
+
+| File | Responsibility |
+| --- | --- |
+| `public/lib/catalog.js` | 20 response defaults, timing, closure, design notes |
+| `public/lib/palettes.js` | Palette families, variants, hue exclusions, selection |
+| `public/lib/planner.js` | Shared plan schema, normalization, multilingual local routing, preferences |
+| `response-api.js` | OpenAI instructions, request, safe fallback |
+| `public/lib/controller.js` | One current session, cancellation, reception/processing/response lifecycle |
+| `public/lib/renderer.js` | Seeded normalized spatial primitives → 16×16 RGB → display |
+| `public/lib/research.js` | Preview controls, session studies and manual JSON export |
+| `public/app.js` | Minimal everyday interaction and responsive viewport |
+| `server.js` | Static asset allowlist and plan/config API |
+
+Renderer uses elapsed time rather than frame counts, excludes paused/hidden time, captures the displayed frame for continuous transitions, and owns one cancellable render loop. Reduced-motion uses stable simplified compositions. A plan arriving while paused is queued without changing the displayed light. Resuming shows the latest valid plan. Hidden tabs stop rendering.
+
+The current RGB buffer is the future hardware boundary: row-major `(y * 16 + x) * 3 + channel`, channel order R/G/B, integers 0–255. A hardware adapter can consume it without changing semantic routing. No Arduino, serial or Bluetooth output is implemented.
+
+## Deployment
+
+Existing target stays **Railway**, repository `skkubaozuowen/Housemate-Lamp`, branch `codex/housemate`. Repository root, start command `npm start`, Node 20+, no build command. Keep the existing `OPENAI_API_KEY` service variable; never commit the key file. The HTTPS origin check supports Railway's TLS proxy. Static files are allowlisted, so credentials and server modules cannot be downloaded.
+
+Public page: https://housemate-lamp-production.up.railway.app/
+
+## Research limits and extension points
+
+These palette/movement/timing combinations are prototype engineering choices. Whether people understand or prefer them remains to be compared in the designer workshop and, where appropriate, user research. They do not establish universal color meanings or health effects. The provided implementation brief motivates dimensions using Clark & Brennan (grounding), Reis/Clark/Holmes (responsiveness), Harrison et al. and Liu et al. (point-light expressiveness), Russell (affect), and Wilms/Oberfeld and Jonauskaite et al. (color associations). Their results are not validation of these specific 2D animations.
+
+Reserved extensions, without current hardware dependencies: E01 propose/negotiate palette options; E02 direct attention inside the lamp surface; E03 recall a saved session scene; E04 shared waiting. Session scene recall is available in the study drawer. There is no cross-session memory.

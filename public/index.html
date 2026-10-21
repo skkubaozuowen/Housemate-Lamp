@@ -1,4 +1,100 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content"><meta name="theme-color" content="#faf8ff"><title>Housemate — A little light for your day</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
-<body><div id="ambient" aria-hidden="true"><div class="light-layer active" data-light="default"></div><div class="light-layer" data-light="joy"></div><div class="light-layer" data-light="calm"></div><div class="light-layer" data-light="rest"></div><div class="light-layer" data-light="steady"></div><div class="light-layer" data-light="mixed"></div><div class="light-layer" data-light="melancholy"></div></div><main class="chat-app"><header><a class="brand" href="/" aria-label="Housemate home"><span class="brand-dot"></span>housemate<span class="brand-period">.</span></a><div class="header-actions"><button id="motion" type="button" aria-pressed="false">Pause light</button><button id="clear" type="button">New moment <span aria-hidden="true">↗</span></button></div></header><section id="messages" aria-label="Conversation" role="log" aria-live="polite"><div id="welcome"><p class="eyebrow">A LITTLE LIGHT FOR YOUR DAY</p><h1>How are you,<br><em>really?</em></h1><p class="intro">Tell me a little about your day.<br>Let your feelings become light.</p><div class="examples"><button type="button">It's my birthday today.</button><button type="button">Happy, but a little lonely.</button><button type="button">I just need a quiet moment.</button></div></div></section><div class="bottom"><div id="light-status" role="status">Soft light. Room to feel.</div><form id="composer"><label class="sr-only" for="question">Share a moment</label><textarea id="question" placeholder="What's on your mind?" maxlength="2000" rows="1"></textarea><div class="composer-bottom"><span id="counter">0 / 2000</span><span class="key-hint">Enter to share</span><button id="send" type="submit" aria-label="Share your moment"><span id="send-label">Share</span><span aria-hidden="true">↗</span></button></div></form><footer>AI can misread a feeling. You know yours best.<span>Your words are sent to OpenAI. This page keeps no saved history.</span></footer></div></main></body></html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
+  <meta name="theme-color" content="#faf8ff">
+  <meta name="description" content="Housemate Lamp — share a moment and let light respond.">
+  <title>Housemate — A little light for your day</title>
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <div id="ambient" aria-hidden="true"><canvas id="light"></canvas></div>
+  <main class="experience">
+    <header>
+      <a class="brand" href="/" aria-label="Housemate home"><span class="brand-dot"></span>housemate<span class="brand-period">.</span></a>
+      <div class="header-actions"><button id="motion" type="button" aria-pressed="false">Pause light</button><button id="clear" type="button">New moment <span aria-hidden="true">↗</span></button></div>
+    </header>
+    <section class="light-space" aria-label="Light experience">
+      <div id="welcome">
+        <p class="eyebrow">A LITTLE LIGHT FOR YOUR DAY</p>
+        <h1>Your words.<br><em>A little light.</em></h1>
+        <p class="intro">Say hello. Share a feeling.<br>Let the light respond.</p>
+        <div class="examples" aria-label="Try a moment">
+          <button type="button" data-example="I'm home.">I'm home.</button>
+          <button type="button" data-example="Stay with me for a while.">Stay with me.</button>
+          <button type="button" data-example="It's my birthday today.">It's my birthday.</button>
+          <button type="button" data-example="I'd like some time alone.">A little time alone.</button>
+        </div>
+      </div>
+      <p id="moment" hidden></p>
+      <p id="live-status" class="sr-only" role="status" aria-live="polite"></p>
+    </section>
+    <div class="bottom">
+      <div id="mode-banner" hidden><span id="mode-message">Local demo · Try a moment.</span><button id="retry" type="button" hidden>Retry AI</button></div>
+      <p class="input-hint">You can say “slower”, “another color”, or “keep this one”.</p>
+      <form id="composer">
+        <label class="sr-only" for="question">Share a moment</label>
+        <textarea id="question" placeholder="What's on your mind?" maxlength="2000" rows="1"></textarea>
+        <div class="composer-bottom"><span id="counter">0 / 2000</span><span class="key-hint">Enter to share</span><button id="send" type="submit" aria-label="Share your moment"><span>Share</span><span aria-hidden="true">↗</span></button></div>
+      </form>
+      <footer><span id="privacy">Words stay in this moment. No saved conversation.</span><button id="open-research" type="button" aria-haspopup="dialog">Light study</button></footer>
+    </div>
+  </main>
+  <dialog id="research" aria-labelledby="research-title">
+    <div class="panel-header"><div><p class="eyebrow">WORKSHOP / PROTOTYPE 01</p><h2 id="research-title">Light study</h2></div><button id="close-research" type="button">Close</button></div>
+    <p class="panel-intro">Explore a response, then shape its light. These are design hypotheses, waiting to be tested together.</p>
+    <div class="panel-state"><span id="phase">idle</span><span id="source">demo</span><span id="paused-state"></span></div>
+    <section class="panel-section">
+      <h3>01 <span>Response library</span> <small>20 studies</small></h3>
+      <div id="response-library" class="response-library"></div>
+      <p id="response-description" class="panel-note"></p><p id="hypothesis" class="hypothesis"></p>
+    </section>
+    <section class="panel-section">
+      <h3>02 <span>Color & movement</span></h3>
+      <form id="parameters">
+        <div class="control-grid">
+          <label>Palette family<select id="palette-family" name="paletteFamily"></select></label>
+          <label>Variation<select id="palette-variant" name="paletteVariant"></select></label>
+          <label>Visible colors<input id="color-count" name="colorCount" type="number" min="1" max="4" value="3"></label>
+          <label>Seed<input id="seed" name="seed" type="number" min="0" max="4294967295" value="1827"></label>
+          <label>Motion<select id="primitive" name="motionPrimitive"></select></label>
+          <label>Duration · seconds<input id="duration" name="durationMs" type="number" min="0.4" max="20" step="0.001" value="6"></label>
+          <label>Flow speed <output id="speed-output">1.00</output><input id="speed" name="speed" type="range" min="0.05" max="2" step="0.01"></label>
+          <label>Amplitude <output id="amplitude-output">0.40</output><input id="amplitude" name="amplitude" type="range" min="0" max="1" step="0.01"></label>
+          <label>Energy <output id="energy-output">0.30</output><input id="energy" name="energy" type="range" min="0" max="1" step="0.01"></label>
+          <label>Transition · seconds<input id="transition" name="transitionMs" type="number" min="0.15" max="5" step="0.001" value="1.8"></label>
+        </div>
+        <div class="checks"><label><input type="checkbox" id="loop" name="loop"> Loop</label><label><input type="checkbox" id="fixed-seed" checked> Keep seed fixed</label></div>
+        <div class="button-row"><button type="submit" class="primary">Preview / replay</button><button id="use-current" type="button">Use current light</button><button id="stop-preview" type="button">Hold light</button><button id="restore-defaults" type="button">Restore defaults</button></div>
+      </form>
+      <div id="swatches" class="swatches" aria-label="Current palette"></div>
+      <div class="button-row"><button id="save-palette" type="button">Keep this palette</button><button id="release-palette" type="button">Release preferences</button></div>
+      <p id="preference-info" class="panel-note"></p>
+    </section>
+    <section class="panel-section">
+      <h3>03 <span>From field to matrix</span></h3>
+      <div class="control-grid"><label>Main view<select id="view"><option value="diffusion">Diffusion</option><option value="grid">16 × 16 matrix</option></select></label><label>Understanding<select id="understanding"><option value="ai">AI + local boundaries</option><option value="demo">Local demo</option></select></label></div>
+      <canvas id="grid" width="320" height="320" aria-label="16 by 16 RGB light frame"></canvas>
+      <p class="panel-note">Both views share the same 256 RGB pixels. No hardware is connected.</p>
+      <button id="simulate-error" type="button">Preview request failure & retry</button>
+    </section>
+    <section class="panel-section">
+      <h3>04 <span>Session studies</span></h3>
+      <div class="button-row"><button id="save-scene" type="button">Save this scene</button><button id="copy-plan" type="button">Copy plan</button><button id="export-plan" type="button">Export plan</button></div>
+      <div id="saved-scenes" class="saved-scenes"></div>
+      <details><summary>Current response plan</summary><pre id="plan-json"></pre></details>
+      <p class="panel-note">Scenes and feedback live in this tab only. Exports contain settings, never the conversation.</p>
+    </section>
+    <section class="panel-section">
+      <h3>05 <span>Workshop notes</span></h3>
+      <label class="note-label" for="workshop-note">What would you change?</label><textarea id="workshop-note" maxlength="1000" placeholder="Color, timing, movement…" rows="3"></textarea>
+      <div class="button-row"><button type="button" data-rating="like">Like</button><button type="button" data-rating="dislike">Dislike</button><button type="button" data-rating="change">Save suggestion</button><button type="button" id="export-feedback">Export notes</button></div>
+      <p id="feedback-count" class="panel-note">No notes yet.</p>
+      <details><summary>Design notes & next steps</summary><p class="panel-note">Reception, acknowledgement, repair, and closure are inspired by communication grounding. Responsive care is an exploratory analogy from interpersonal research. Color associations vary across people and cultures. No color, motion, or timing here has been validated as universal.</p><p class="panel-note">Reserved extensions: negotiation, shared attention, recalled scenes, and shared waiting. No voice, hardware connection, accounts, or remote analytics in this prototype.</p></details>
+    </section>
+    <p id="panel-status" role="status" aria-live="polite"></p>
+  </dialog>
+</body>
+</html>
