@@ -44,7 +44,7 @@ No physical LED matrix is connected. Diffusion is an approximation produced from
 - Simulated failure visibly showed the failure-preview label, interrupted-return state and Retry AI button. Retry cleared the banner and completed into a waiting-for-input light state.
 - Final multilingual refinements also tested: “keep this one” / “就保持这样” / “이대로” keep the current palette; “don't leave me alone” invites company; “tired” does not become a red-color ban.
 
-## Color correction update · 2026-10-22
+## Color correction baseline · 2026-10-22 · v2.0.1
 
 `npm test`: **55 passed, 0 failed**, including HTTP integration; changed JavaScript syntax checks and `git diff --check` passed. The original interaction/renderer/cancellation checks remain included.
 
@@ -56,3 +56,13 @@ No physical LED matrix is connected. Diffusion is an approximation produced from
 - In-app Chromium browser: verified manual pink preview overriding a blue lock, then keeping pink and sending “不要这个颜色” visibly changed it to warm coral. Verified the combined no-blue/pink/slower input against the current-plan JSON, actual swatches and preference text. Captured before/after screenshots in `/private/tmp/housemate-color-before.png` and `/private/tmp/housemate-color-rejected.png`.
 
 This update repairs direct color control. Multi-emotion weights, unrestricted color generation and the previously discussed R03/R04 priority are not implemented by this patch.
+
+## One-moment color requests · 2026-10-22 · v2.0.2
+
+This section supersedes v2.0.1's automatic keeping of a requested color. `npm test`: **59 passed, 0 failed**; planner/API syntax and diff checks passed.
+
+- A direct named color changes the current scene without creating a palette lock. Settling, thanks, waiting, solitude and motion corrections retain that scene's palette.
+- A new emotional response uses its original catalog theme, balanced variation and three tones, unless a palette was explicitly kept. Server validation prevents old color requests in AI history, or a model-selected old blue/one-tone palette, from overriding this rule. Existing hue exclusions and rejected palettes remain respected.
+- Explicit “保持这个颜色” works both as a follow-up and in the same input as a new named color. A new temporary color releases an older lock. Manual Keep and saved-scene preferences retain their existing behavior.
+- Real configured AI/API chain: “想要蓝色” returned `named_blue` with no lock; “我很开心” returned `source:ai`, `celebrate`, `apricot_rose`, balanced, three tones and no lock. Repeating blue, then explicitly keeping it, caused the next real AI celebration to retain `named_blue` as requested.
+- Browser UI confirmed the same blue → new happy moment sequence, with source `ai`, an unlocked palette and the original yellow/pink/peach swatches. Screenshots: `/private/tmp/housemate-temporary-blue.png` and `/private/tmp/housemate-new-joy-after-blue.png`.

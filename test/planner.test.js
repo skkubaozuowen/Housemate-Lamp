@@ -138,7 +138,7 @@ test('rejection follows the palette actually shown when an old plan has differen
   assert.notDeepEqual(selectPalette(result.plan, result.preferences), selectPalette(currentPlan, preferences));
 });
 
-test('explicit named colors deterministically replace old locks, bans and rejections', () => {
+test('explicit named colors replace this moment and clear old locks, bans and rejections', () => {
   const currentPlan = createPlan('accompany', { paletteFamily: 'lilac_blush' });
   const preferences = normalizePreferences({ avoidedColors: ['blue'], rejectedPalettes: [NAMED_COLOR_FAMILIES.blue], lockedPalette: { paletteFamily: 'peach_amber', paletteVariant: 'misted', colorCount: 3 } });
   for (const [text, hue] of [['我要蓝色', 'blue'], ['要蓝色', 'blue'], ['换成红色', 'red'], ['change the color to blue', 'blue'], ['make it pink', 'pink'], ['파란색으로 바꿔줘', 'blue']]) {
@@ -147,12 +147,12 @@ test('explicit named colors deterministically replace old locks, bans and reject
     assert.equal(result.priority, true, text);
     assert.equal(result.plan.responseType, 'repair', text);
     assert.equal(result.plan.paletteFamily, family, text);
-    assert.equal(result.preferences.lockedPalette.paletteFamily, family, text);
+    assert.equal(result.preferences.lockedPalette, null, text);
     assert.ok(!result.preferences.avoidedColors.includes(hue), text);
     assert.ok(!result.preferences.rejectedPalettes.includes(family), text);
     const later = planLocal('今天生日', { currentPlan: result.plan, preferences: result.preferences });
-    assert.equal(later.plan.paletteFamily, family, text);
-    assert.equal(applyPreferences(createPlan('celebrate'), result.preferences).paletteFamily, family, text);
+    assert.equal(later.plan.paletteFamily, createPlan('celebrate').paletteFamily, text);
+    assert.equal(applyPreferences(createPlan('celebrate'), result.preferences).paletteFamily, createPlan('celebrate').paletteFamily, text);
   }
 });
 
@@ -165,12 +165,12 @@ test('color bans, positive replacement and motion correction compose in one loca
     assert.equal(result.priority, true, text);
     assert.deepEqual(result.preferences.avoidedColors, ['blue'], text);
     assert.equal(result.plan.paletteFamily, NAMED_COLOR_FAMILIES.pink, text);
-    assert.equal(result.preferences.lockedPalette.paletteFamily, NAMED_COLOR_FAMILIES.pink, text);
+    assert.equal(result.preferences.lockedPalette, null, text);
     assert.ok(result.plan.speed < currentPlan.speed, text);
     assert.ok(result.plan.amplitude < currentPlan.amplitude, text);
     assert.ok(result.plan.amplitude > 0, text);
     const later = planLocal('陪我待一会儿', { currentPlan: result.plan, preferences: result.preferences });
-    assert.equal(later.plan.paletteFamily, NAMED_COLOR_FAMILIES.pink, text);
+    assert.notEqual(later.plan.paletteFamily, NAMED_COLOR_FAMILIES.pink, text);
     assert.ok(!PALETTE_FAMILIES[later.plan.paletteFamily].tags.includes('blue'), text);
   }
   const active = planLocal('换个颜色，太单调了，活跃一点', { currentPlan, preferences });
@@ -189,7 +189,8 @@ test('color words in feelings, possessions or unrelated dislikes do not change p
   }
   const result = planLocal('Use blue without pink', { currentPlan });
   assert.deepEqual(result.preferences.avoidedColors, ['pink']);
-  assert.equal(result.preferences.lockedPalette.paletteFamily, NAMED_COLOR_FAMILIES.blue);
+  assert.equal(result.preferences.lockedPalette, null);
+  assert.equal(result.plan.paletteFamily, NAMED_COLOR_FAMILIES.blue);
 });
 
 test('contrastive color requests keep the desired hue and reject only its alternative', () => {
@@ -199,11 +200,37 @@ test('contrastive color requests keep the desired hue and reject only its altern
     assert.equal(result.priority, true, text);
     assert.equal(result.plan.responseType, 'repair', text);
     assert.equal(result.plan.paletteFamily, NAMED_COLOR_FAMILIES.blue, text);
-    assert.equal(result.preferences.lockedPalette.paletteFamily, NAMED_COLOR_FAMILIES.blue, text);
+    assert.equal(result.preferences.lockedPalette, null, text);
     assert.deepEqual(result.preferences.avoidedColors, ['pink'], text);
   }
   assert.deepEqual(planLocal('蓝色不要', { currentPlan }).preferences.avoidedColors, ['blue']);
   assert.deepEqual(planLocal('파란색 말고', { currentPlan }).preferences.avoidedColors, ['blue']);
+});
+
+test('named color lasts for the current moment; only explicit keep locks subsequent emotion colors', () => {
+  const currentPlan = createPlan('idle', { paletteFamily: 'lilac_blush' });
+  const blue = planLocal('想要蓝色', { currentPlan });
+  assert.equal(blue.plan.paletteFamily, NAMED_COLOR_FAMILIES.blue);
+  assert.equal(blue.preferences.lockedPalette, null);
+  for (const text of ['谢谢', '慢一点']) {
+    const continuation = planLocal(text, { currentPlan: blue.plan, preferences: blue.preferences });
+    assert.equal(continuation.plan.paletteFamily, NAMED_COLOR_FAMILIES.blue, text);
+    assert.equal(continuation.preferences.lockedPalette, null, text);
+  }
+  const joy = planLocal('我很开心', { currentPlan: blue.plan, preferences: blue.preferences });
+  assert.equal(joy.plan.responseType, 'celebrate');
+  assert.equal(joy.plan.paletteFamily, createPlan('celebrate').paletteFamily);
+  const kept = planLocal('保持这个颜色', { currentPlan: blue.plan, preferences: blue.preferences });
+  assert.equal(kept.preferences.lockedPalette.paletteFamily, NAMED_COLOR_FAMILIES.blue);
+  assert.equal(planLocal('我很开心', { currentPlan: kept.plan, preferences: kept.preferences }).plan.paletteFamily, NAMED_COLOR_FAMILIES.blue);
+  for (const text of ['换成蓝色并保持这个颜色', 'Make it pink and keep this color']) {
+    const hue = text.includes('pink') ? 'pink' : 'blue';
+    const result = planLocal(text, { currentPlan });
+    assert.equal(result.plan.responseType, 'repair');
+    assert.equal(result.plan.paletteFamily, NAMED_COLOR_FAMILIES[hue]);
+    assert.equal(result.preferences.lockedPalette.paletteFamily, NAMED_COLOR_FAMILIES[hue]);
+    assert.equal(planLocal('我很开心', { currentPlan: result.plan, preferences: result.preferences }).plan.paletteFamily, NAMED_COLOR_FAMILIES[hue]);
+  }
 });
 
 test('boundaries win over color commands and old rejection history rolls over without freezing', () => {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import http from 'node:http';
 import { createServer } from '../server.js';
-import { createPlan } from '../public/lib/catalog.js';
+import { CATALOG, createPlan } from '../public/lib/catalog.js';
 import { validatePlan } from '../public/lib/planner.js';
 import { selectPalette, colorGroup } from '../public/lib/palettes.js';
 
@@ -130,4 +130,27 @@ test('HTTP color corrections supersede locks and compose bans, target hue and mo
   assert.ok(pink.preferences.speedScale<1);
   assert.ok(selectPalette(pink.plan,pink.preferences).every(color=>colorGroup(color)==='pink'));
   assert.ok(validatePlan(pink.plan)); assert.equal(upstreamCalls,0);
+});
+
+test('AI emotional themes replace temporary colors even when model history suggests keeping the old hue', async t => {
+  let responseType='celebrate',sentBody;
+  const {post}=await fixture(t,{keyProvider:async()=>'test-key',fetchImpl:async(_url,options)=>{
+    sentBody=JSON.parse(options.body);
+    return completed(createPlan(responseType,{paletteFamily:'named_blue',paletteVariant:'misted',colorCount:1}));
+  }});
+  const blue=await (await post({text:'想要蓝色',mode:'ai'})).json();
+  assert.equal(blue.plan.paletteFamily,'named_blue'); assert.equal(blue.preferences.lockedPalette,null);
+  const context={currentPlan:blue.plan,preferences:blue.preferences,stableState:'idle'};
+  for(const type of ['celebrate','empathize','soothe','encourage','accompany']) {
+    responseType=type;
+    const result=await (await post({text:'A new moment to share.',mode:'ai',context,history:[{role:'user',content:'想要蓝色'}]})).json();
+    assert.equal(result.source,'ai'); assert.equal(result.plan.paletteFamily,CATALOG[type].paletteFamily,type);
+    assert.equal(result.plan.paletteVariant,'balanced'); assert.equal(result.plan.colorCount,3);
+    assert.equal(result.preferences.lockedPalette,null);
+  }
+  assert.ok(sentBody.input.some(item=>item.content==='想要蓝色'),'useful history is retained; it cannot silently lock a palette');
+  responseType='celebrate';
+  const kept=await (await post({text:'保持这个颜色',mode:'ai',context})).json();
+  const locked=await (await post({text:'我很开心',mode:'ai',context:{currentPlan:kept.plan,preferences:kept.preferences,stableState:'idle'}})).json();
+  assert.equal(locked.plan.paletteFamily,'named_blue','only explicit Keep persists into the new emotion');
 });

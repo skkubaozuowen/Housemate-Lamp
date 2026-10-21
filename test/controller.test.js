@@ -100,9 +100,9 @@ test('repair respects scaled motion when returning to company and changing mode'
   c.setMode('ai'); assert.equal(c.plan.speed,speed);
 });
 
-test('color repair visibly replaces a kept palette and persists through closure and later AI', async () => {
+test('color repair replaces a kept palette through closure; a later AI emotion uses its catalog palette', async () => {
   let requests=0;
-  const {controller:c,renderer:r}=session(async()=>{requests++; return {plan:createPlan('celebrate',{paletteFamily:'mist_blue'}),mode:'ai',source:'ai'};},'ai');
+  const {controller:c,renderer:r}=session(async()=>{requests++; return {plan:createPlan('celebrate'),mode:'ai',source:'ai'};},'ai');
   const original=r.colors.map(color=>[...color]);
   await c.submit('保持现在的颜色'); r.finish(); r.finish();
   await c.submit('不要这个颜色');
@@ -118,11 +118,62 @@ test('color repair visibly replaces a kept palette and persists through closure 
   assert.ok(r.colors.every(color=>colorGroup(color)==='pink'));
   const kept=c.plan.paletteFamily;
   r.finish();
+  assert.equal(c.plan.paletteFamily,kept);
+  assert.equal(c.preferences.lockedPalette,null,'a requested color is not implicitly kept');
+  await c.submit('谢谢'); r.finish();
+  assert.equal(c.plan.responseType,'receive_thanks'); assert.equal(c.plan.paletteFamily,kept);
+  r.finish(); assert.equal(c.plan.paletteFamily,kept);
+  await c.submit('慢一点');
+  assert.equal(c.plan.responseType,'repair'); assert.equal(c.plan.paletteFamily,kept);
+  assert.ok(r.colors.every(color=>colorGroup(color)==='pink'));
+  r.finish(); assert.equal(c.plan.paletteFamily,kept);
   await c.submit('今天很开心'); r.finish();
   assert.equal(requests,1,'explicit color commands skip the AI, later emotional sharing uses it');
-  assert.equal(c.plan.paletteFamily,kept);
-  assert.ok(r.colors.every(color=>colorGroup(color)==='pink'));
+  assert.equal(c.plan.responseType,'celebrate');
+  assert.equal(c.plan.paletteFamily,'apricot_rose');
+  assert.equal(c.preferences.lockedPalette,null);
+  assert.deepEqual(r.colors,selectPalette(c.plan,c.preferences));
+  r.finish(); assert.equal(c.plan.paletteFamily,'apricot_rose');
   c.reset(); assert.deepEqual(c.preferences.rejectedPalettes,[]); assert.equal(c.preferences.lockedPalette,null);
+});
+
+test('a requested demo color survives settling and small follow-ups, then yields to a new emotional response', async () => {
+  const {controller:c,renderer:r}=session();
+  await c.submit('想要蓝色');
+  assert.equal(c.plan.responseType,'repair'); assert.equal(c.plan.paletteFamily,'named_blue');
+  assert.equal(c.preferences.lockedPalette,null);
+  r.finish(); assert.equal(c.phase,'idle'); assert.equal(c.plan.paletteFamily,'named_blue');
+  assert.ok(r.colors.every(color=>colorGroup(color)==='blue'));
+  await c.submit('慢一点');
+  assert.equal(c.plan.responseType,'repair'); assert.equal(c.plan.paletteFamily,'named_blue');
+  r.finish(); assert.equal(c.plan.paletteFamily,'named_blue');
+  await c.submit('谢谢'); r.finish();
+  assert.equal(c.plan.responseType,'receive_thanks'); assert.equal(c.plan.paletteFamily,'named_blue');
+  r.finish(); assert.equal(c.plan.paletteFamily,'named_blue');
+  await c.submit('我很开心'); r.finish();
+  assert.equal(c.plan.responseType,'celebrate'); assert.equal(c.plan.paletteFamily,'apricot_rose');
+  assert.equal(c.preferences.lockedPalette,null);
+  assert.deepEqual(r.colors,selectPalette(c.plan,c.preferences));
+  r.finish(); assert.equal(c.phase,'idle'); assert.equal(c.plan.paletteFamily,'apricot_rose');
+});
+
+test('only explicit keep carries a requested color into new emotions; another named color releases it', async () => {
+  const {controller:c,renderer:r}=session();
+  await c.submit('想要蓝色'); r.finish();
+  assert.equal(c.preferences.lockedPalette,null);
+  await c.submit('保持这个颜色'); r.finish(); r.finish();
+  assert.equal(c.preferences.lockedPalette.paletteFamily,'named_blue');
+  await c.submit('我很开心'); r.finish();
+  assert.equal(c.plan.responseType,'celebrate'); assert.equal(c.plan.paletteFamily,'named_blue');
+  assert.ok(r.colors.every(color=>colorGroup(color)==='blue'));
+  r.finish(); assert.equal(c.plan.paletteFamily,'named_blue');
+  await c.submit('换成粉色');
+  assert.equal(c.plan.responseType,'repair'); assert.equal(c.plan.paletteFamily,'named_pink');
+  assert.equal(c.preferences.lockedPalette,null,'a new named request releases the previous explicit lock');
+  r.finish(); assert.equal(c.plan.paletteFamily,'named_pink');
+  await c.submit('我很开心'); r.finish();
+  assert.equal(c.plan.responseType,'celebrate'); assert.equal(c.plan.paletteFamily,'apricot_rose');
+  r.finish(); assert.equal(c.plan.paletteFamily,'apricot_rose');
 });
 
 test('latest color correction aborts an older AI response before it can restore old colors', async () => {
@@ -137,7 +188,10 @@ test('latest color correction aborts an older AI response before it can restore 
 
 test('manual color preview replaces an old lock while restoring a saved scene preserves its preferences', async () => {
   const {controller:c,renderer:r}=session();
-  await c.submit('换成蓝色'); c.saveScene();
+  await c.submit('换成蓝色'); r.finish();
+  await c.submit('保持这个颜色'); r.finish(); r.finish();
+  assert.equal(c.preferences.lockedPalette.paletteFamily,'named_blue');
+  c.saveScene();
   const savedPreferences=structuredClone(c.preferences);
   c.preview(createPlan('soothe',{paletteFamily:'named_pink'}));
   assert.equal(c.plan.paletteFamily,'named_pink'); assert.equal(c.preferences.lockedPalette,null);

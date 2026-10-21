@@ -166,6 +166,7 @@ export function planLocal(input, context = {}) {
       prefs.lockedPalette = null;
       if (currentFamily && !prefs.rejectedPalettes.includes(currentFamily)) prefs.rejectedPalettes.push(currentFamily);
     }
+    let namedChoice = null;
     for (const { type, color } of colorCommands) {
       if (type === 'ban') {
         if (!prefs.avoidedColors.includes(color)) prefs.avoidedColors.push(color);
@@ -174,10 +175,13 @@ export function planLocal(input, context = {}) {
         const family = NAMED_COLOR_FAMILIES[color];
         prefs.avoidedColors = prefs.avoidedColors.filter(avoided => avoided !== color);
         prefs.rejectedPalettes = prefs.rejectedPalettes.filter(rejected => rejected !== family);
-        prefs.lockedPalette = { paletteFamily: family, paletteVariant: 'balanced', colorCount: current?.colorCount || 3 };
+        // A named color changes this moment. Only an explicit “keep” makes it sticky.
+        prefs.lockedPalette = null;
+        namedChoice = { paletteFamily: family, paletteVariant: 'balanced', colorCount: current?.colorCount || 3 };
+        Object.assign(overrides, namedChoice);
       }
     }
-    if (chooseAnother && !prefs.lockedPalette) {
+    if (chooseAnother && !prefs.lockedPalette && !namedChoice) {
       let replacement = replacementPalette(current || createPlan('idle', { seed }), prefs, previousPreferences);
       if (!replacement) {
         // After a full tour, forget older rejections while still declining the current field.
@@ -194,8 +198,9 @@ export function planLocal(input, context = {}) {
       overrides.paletteFamily = replacement;
     }
     if (prefs.lockedPalette) Object.assign(overrides, prefs.lockedPalette);
-    else if (keepRequested && !colorRepair && current) {
-      prefs.lockedPalette = { ...keep };
+    if (keepRequested && (current || namedChoice)) {
+      const family = resolvePaletteFamily(overrides, prefs);
+      if (family) prefs.lockedPalette = { paletteFamily: family, paletteVariant: overrides.paletteVariant || 'balanced', colorCount: overrides.colorCount || 3 };
     }
     return make('repair', overrides);
   }
