@@ -1,15 +1,16 @@
 export const PALETTE_VARIANTS = Object.freeze(['misted', 'balanced', 'accented']);
 const families = [
-  ['lilac_blush','Lilac & blush',['#C6B4F8','#F6B9D6','#E8D6FF','#FFF8F3']],
-  ['mist_blue','Mist blue',['#79B9C5','#ACC9D2','#C5DEE8','#F3F8FA']],
-  ['peach_amber','Peach & amber',['#FFAD8F','#F5D28D','#FFD9C8','#FFF4E8']],
-  ['rose_lavender','Rose & lavender',['#F2ADC7','#BDB0E6','#E7D9EE','#FBEFF5']],
-  ['sage_cream','Sage & cream',['#B9CFB1','#EFE4BC','#D8E2CF','#F7F5EA']],
-  ['dusk_indigo','Dusk indigo',['#899AC2','#A59BC6','#C2BCD6','#E8E6F2']],
+  // Luminous chromatic pastels keep the diffused light legible against white.
+  ['lilac_blush','Lilac & blush',['#C0A4FF','#FFA7D4','#E5C6FF','#FFF4FC']],
+  ['mist_blue','Mist blue',['#78D4EE','#A3E4F3','#BDEDF8','#F0FAFF']],
+  ['peach_amber','Peach & amber',['#FFAA85','#FFD578','#FFD2B4','#FFF3DC']],
+  ['rose_lavender','Rose & lavender',['#F99AC8','#C2A0F5','#F1C3EC','#FFF0FA']],
+  ['sage_cream','Sage & cream',['#B3DFA5','#E9ED9E','#CFECC1','#FAF7E3']],
+  ['dusk_indigo','Periwinkle & violet',['#ABB5FF','#C0A6FA','#D8C2FF','#F1ECFF']],
   ['apricot_rose','Apricot & rose',['#FFD166','#F28FB5','#FFC5A3','#F7E2B3']],
-  ['sea_glass','Sea glass',['#84C7BC','#A8C6DC','#B5DFD5','#EDF8F3']],
-  ['mauve_sand','Mauve & sand',['#BCA4B5','#D6BCB4','#E7D8CB','#F6EEE9']],
-  ['coral_clay','Coral & clay',['#C98176','#D99B72','#E6B17A','#EAD5C9']],
+  ['sea_glass','Sea glass',['#7EDCCA','#A3D7F5','#BAEEDC','#EFFCF7']],
+  ['mauve_sand','Orchid & peach',['#D3A5F6','#FFB7CE','#FFD1AD','#FFF1F8']],
+  ['coral_clay','Coral & apricot',['#FFA59B','#FFC38E','#FFD2A9','#FFF0DE']],
   ['neutral_haze','Neutral haze',['#9AA6B2','#CBD2DD','#E8E9F0','#FAF8F5']],
   // Single-hue options make explicit requests ("use pink") unambiguous. They
   // supplement, rather than replace, the original mixed-color compositions.

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {CATALOG,RESPONSE_TYPES,createPlan} from '../public/lib/catalog.js';
 import {PALETTE_FAMILIES,PALETTE_VARIANTS,NAMED_COLOR_FAMILIES,selectPalette,colorGroup} from '../public/lib/palettes.js';
 import {renderFrame,LightRenderer} from '../public/lib/renderer.js';
@@ -30,8 +31,39 @@ test('communication pairs have different motion signatures even in the same pale
   }
 });
 
+test('purpose-specific geometry distinguishes nearby responses with identical color and motion parameters',()=>{
+  const colors=[[158,130,240],[243,139,183],[255,192,131]];
+  const common={seed:4589,energy:.55,speed:.6,amplitude:.65,durationMs:4000};
+  const pairs=[['idle','accompany'],['acknowledge','affirm'],['acknowledge','farewell'],['processing','wait'],['greet','encourage'],['greet','celebrate'],['encourage','celebrate'],['affirm','complete'],['clarify','wait'],['decline','farewell'],['decline','error'],['empathize','repair'],['soothe','withdraw'],['receive_thanks','notify']];
+  for(const [left,right] of pairs) {
+    const a=createPlan(left,common),b=createPlan(right,common);
+    const deltas=[.12,.3,.5,.72,.9].map(progress=>difference(renderFrame(a,4000*progress,{colors}),renderFrame(b,4000*progress,{colors})));
+    const mean=deltas.reduce((sum,value)=>sum+value,0)/deltas.length;
+    assert.ok(mean>3.5,`${left}/${right} need a sustained visible difference: ${deltas}`);
+    assert.ok(deltas.filter(value=>value>3).length>=3,`${left}/${right} cannot rely on a single fleeting frame`);
+  }
+});
+
+test('the favorite three-ripple celebration remains byte-for-byte unchanged',()=>{
+  // Captured before the geometry revision. All parameters and RGB colors are
+  // explicit so catalog or palette improvements cannot invalidate the baseline.
+  const plan={version:1,responseType:'celebrate',motionPrimitive:'expand',paletteFamily:'apricot_rose',paletteVariant:'balanced',colorCount:3,seed:4589,energy:.62,speed:.65,amplitude:.75,durationMs:4200,loop:false,transitionMs:1400,nextState:'idle',requiresUserInput:false};
+  const colors=[[255,209,102],[242,143,181],[255,197,163]];
+  const baseline=[
+    [0,'0f08b609822ae33fd1de0df0b2a0edcec948b5a57d44a26ac9e9ce2069364a6f'],
+    [420,'7d7cb66ecbface16113495cd2d27a782fdc4960b8deb71519141a7dd5f195833'],
+    [1050,'2e47bc000506db8c9c2ab51bb5ecb5561bd5d6ab4bc51a54404ead1e432408a4'],
+    [1890,'66cbeb7ab631687f89196cc9f939ae703259f3e420d267d81a48bd24102c4d38'],
+    [2940,'3a0383f5c64a5f6d3da93bb7eaf06e6be68182a54847a069c9c17cc0832626c4'],
+    [3990,'e926bdaf6086b9a645c6dc53aa83b8e7065307abcd3e739c9b850c2c793f3549'],
+    [4200,'0f08b609822ae33fd1de0df0b2a0edcec948b5a57d44a26ac9e9ce2069364a6f'],
+    [6000,'0f08b609822ae33fd1de0df0b2a0edcec948b5a57d44a26ac9e9ce2069364a6f'],
+  ];
+  for(const [elapsed,hash] of baseline)assert.equal(createHash('sha256').update(renderFrame(plan,elapsed,{colors})).digest('hex'),hash,`celebration at ${elapsed}ms`);
+});
+
 test('finite scenes stop and hold; reduced-motion scenes do not keep drifting',()=>{
-  for(const type of ['withdraw','wait','clarify','affirm','soothe']) {
+  for(const type of RESPONSE_TYPES.filter(type=>!CATALOG[type].loop)) {
     const plan=fixed(type);
     assert.deepEqual(renderFrame(plan,plan.durationMs),renderFrame(plan,plan.durationMs+60000),type);
   }
@@ -48,6 +80,21 @@ test('finite gesture speed changes its bounded flow and seed varies the spatial 
   assert.ok(difference(renderFrame({...plan,speed:.1},1100),renderFrame({...plan,speed:1.8},1100))>.1);
   assert.ok(difference(renderFrame({...plan,seed:12},1100),renderFrame({...plan,seed:739},1100))>.1);
   assert.deepEqual(renderFrame({...plan,speed:.1},plan.durationMs),renderFrame({...plan,speed:1.8},plan.durationMs),'speed does not change the finite endpoint');
+});
+
+test('zero amplitude removes processing orbits, company breathing, and the thanks orbital path',()=>{
+  const colors=[[158,130,240],[243,139,183],[255,192,131]];
+  for(const type of ['processing','accompany']) {
+    const still={...fixed(type),amplitude:0};
+    assert.deepEqual(renderFrame(still,150,{colors}),renderFrame(still,2400,{colors}),`${type} must not move at zero amplitude`);
+    const active=fixed(type);
+    assert.ok(difference(renderFrame(active,150,{colors}),renderFrame(active,2400,{colors}))>.1,`${type} retains visible default movement`);
+  }
+  const thanks=fixed('receive_thanks'),still={...thanks,amplitude:0};
+  // These moments have equal finite fade envelopes. Any difference between
+  // them therefore reveals an orbital path that should have been disabled.
+  for(const progress of [.2,.3,.4])assert.deepEqual(renderFrame(still,still.durationMs*progress,{colors}),renderFrame(still,still.durationMs*(1-progress),{colors}),'thanks stays centered at zero amplitude');
+  assert.ok(difference(renderFrame(thanks,thanks.durationMs*.3,{colors}),renderFrame(thanks,thanks.durationMs*.7,{colors}))>.1,'default thanks retains its once-around path');
 });
 
 test('every palette variant respects all declined hue groups, including a conflicting lock',()=>{

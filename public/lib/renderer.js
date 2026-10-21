@@ -14,6 +14,8 @@ const gaussian = (x,y,shape) => Math.exp(-(((x-shape.x)/shape.rx)**2+((y-shape.y
 function addField(scene,x,y,rx,ry,color,strength=1) { scene.push({kind:'field',x,y,rx,ry,color,strength}); }
 function addRing(scene,x,y,radius,width,color,strength=1) { scene.push({kind:'ring',x,y,radius,width,color,strength}); }
 function addBand(scene,position,width,angle,color,strength=1) { scene.push({kind:'band',position,width,angle,color,strength}); }
+function addArc(scene,x,y,radius,width,direction,color,strength=1) { scene.push({kind:'arc',x,y,radius,width,direction,color,strength}); }
+function addStroke(scene,x,y,x2,y2,width,color,strength=1) { scene.push({kind:'stroke',x,y,x2,y2,width,color,strength}); }
 
 function restingFields(scene,phase=0,amplitude=.25,strength=.85) {
   addField(scene,.015+Math.sin(phase)*amplitude*.11,.44+Math.cos(phase)*amplitude*.13,.37,.38,0,strength);
@@ -31,23 +33,31 @@ function primitiveScene(primitive,{p,clock,phase,amp,energy,type}) {
       restingFields(scene,phase,0,base); break;
     case 'slow_drift':
       if(type==='accompany') {
-        addBand(scene,.12+Math.sin(drift*.55)*amp*.13,.23,-.35,0,base*.72);
-        addBand(scene,.84+Math.sin(drift*.55+1.8)*amp*.11,.26,-.35,1,base*.69);
-        addField(scene,.52,.98,.45,.24,2,base*.25);
-      } else restingFields(scene,drift,amp,base);
+        const breath=(Math.sin(clock*.75+phase)+1)/2*(amp/.62);
+        addBand(scene,.17+Math.sin(drift*.9)*amp*.28,.18+breath*.035,-.22,0,base*.88);
+        addBand(scene,.86+Math.sin(drift*.9+2.1)*amp*.25,.22-breath*.025,-.22,1,base*.83);
+        addField(scene,.58,.98,.4,.21,2,base*.32);
+      } else {
+        // Availability wanders at the edges; company occupies traveling bands.
+        addField(scene,-.035+Math.sin(drift)*amp*.19,.4+Math.cos(drift)*amp*.22,.34,.36,0,base);
+        addField(scene,1.04+Math.cos(drift*.83)*amp*.18,.73+Math.sin(drift*.83)*amp*.2,.32,.38,1,base*.95);
+        addField(scene,.58,.99+Math.sin(drift*.6)*amp*.1,.3,.22,2,base*.32);
+      }
       break;
     case 'pass':
-      restingFields(scene,phase,0,base*.35);
-      addField(scene,mix(-.35,1.35,open),.52+Math.sin(open*Math.PI)*amp*.1,.18,.14,0,base*Math.sin(Math.PI*p));
-      addField(scene,mix(-.52,1.18,open),.56,.15,.12,1,base*.4*Math.sin(Math.PI*p));
+      restingFields(scene,phase,0,base*.38);
+      addStroke(scene,mix(-.4,1.18,open),.62,mix(-.16,1.42,open),.56,.105,0,base*1.05*Math.sin(Math.PI*p));
+      addField(scene,mix(-.34,1.24,open),.63,.16,.1,1,base*.45*Math.sin(Math.PI*p));
       break;
     case 'expand': {
       if(type==='encourage') {
         restingFields(scene,phase,0,base*.35);
-        const travel=ease(p/.9);
-        addField(scene,mix(.12,.63,travel),mix(.84,.37,travel),mix(.13,.39,travel),mix(.14,.31,travel),0,base*.85);
-        addField(scene,mix(.05,.38,ease((p-.18)/.72)),mix(.89,.56,ease((p-.18)/.72)),.22,.29,1,base*.65*ease(p/.28));
-        addField(scene,.73,.21,.18,.18,2,base*.42*ease((p-.55)/.4));
+        // Three connected rising stages support a next action, without ripples.
+        const first=ease(p/.46),second=ease((p-.19)/.49),third=ease((p-.48)/.5);
+        addField(scene,mix(.12,.25,first),mix(.87,.69,first),mix(.12,.24,first),.19,0,base*.95);
+        addField(scene,mix(.24,.5,second),mix(.72,.48,second),.23,.19,1,base*.95*second);
+        addField(scene,mix(.5,.76,third),mix(.5,.27,third),.22,.2,2,base*.95*third);
+        addStroke(scene,.2,.75,mix(.2,.71,open),mix(.75,.32,open),.075,0,base*.32*open);
       } else if(type==='celebrate') {
         restingFields(scene,phase,0,base*.4);
         for(let i=0;i<3;i++) {
@@ -55,54 +65,58 @@ function primitiveScene(primitive,{p,clock,phase,amp,energy,type}) {
           if(q>=0&&q<=1) addRing(scene,.45+i*.035,.52-i*.045,.02+ease(q)*.69,.1+i*.008,i,base*.82*Math.sin(Math.PI*q));
         }
       } else {
-        restingFields(scene,phase,0,base*.46);
-        addRing(scene,.25,.49,.03+open*.85,.15,0,base*Math.sin(Math.PI*p));
-        addField(scene,.25,.49,.15+open*.18,.17+open*.18,1,base*.55*(1-open));
+        restingFields(scene,phase,0,base*.42);
+        addArc(scene,.1,.58,.035+open*.95,.14,-.08,0,base*1.15*Math.sin(Math.PI*p));
+        addField(scene,.1,.58,.17+open*.21,.18+open*.19,1,base*.62*(1-open));
       }
       break;
     }
     case 'converge':
       if(type==='processing') {
         const orbit=clock*2.1+phase;
-        restingFields(scene,phase,0,base*.4);
-        addField(scene,.49+Math.cos(orbit)*.075*amp,.58+Math.sin(orbit)*.055*amp,.17,.16,0,base*.85);
-        addField(scene,.49+Math.cos(orbit+Math.PI)*.075*amp,.58+Math.sin(orbit+Math.PI)*.055*amp,.12,.11,1,base*.75);
+        const radius=amp*(.13+.095/.55);
+        restingFields(scene,phase,0,base*.31);
+        addField(scene,.49+Math.cos(orbit)*radius,.57+Math.sin(orbit)*radius*.75,.135,.13,0,base*1.12);
+        addField(scene,.49+Math.cos(orbit+Math.PI)*radius,.57+Math.sin(orbit+Math.PI)*radius*.75,.115,.12,1,base*.92);
+        addField(scene,.49,.57,.14,.13,2,base*.25);
       } else if(type==='complete') {
         for(let i=0;i<3;i++) {
-          const angle=phase+i*TAU/3, radius=(1-open)*.35;
-          addField(scene,.5+Math.cos(angle)*radius,.54+Math.sin(angle)*radius,mix(.17,.4,open),mix(.17,.36,open),i,base*.7);
+          const gathered=ease((p-i*.07)/(1-i*.07));
+          const origins=[[.12,.22],[.87,.3],[.5,.9]],dockX=.47+i*.035;
+          addField(scene,mix(origins[i][0],dockX,gathered),mix(origins[i][1],.64,gathered),mix(.15,.29,gathered),mix(.17,.23,gathered),i,base*.85);
         }
+        addField(scene,.52,.64,.32,.13,0,base*.4*ease((p-.62)/.38));
       } else {
-        addField(scene,mix(.13,.47,open),.53,.28,.29,0,base);
-        addField(scene,mix(.87,.53,open),.53,.28,.29,1,base);
-        addField(scene,.5,.53,.2,.21,2,base*.55*ease((p-.63)/.37));
+        addField(scene,mix(.1,.37,open),.51,.23,.27,0,base);
+        addField(scene,mix(.9,.63,open),.51,.23,.27,1,base);
+        addStroke(scene,.35,.51,mix(.35,.65,ease((p-.35)/.5)),.51,.105,2,base*.95*ease((p-.35)/.5));
       }
       break;
     case 'separate':
       if(type==='farewell') {
-        addField(scene,mix(.25,-.1,open),.49,.36,.38,0,base*(1-open*.65));
-        addField(scene,mix(.75,1.1,open),.7,.35,.4,1,base*(1-open*.65));
+        addField(scene,mix(.29,-.09,open),mix(.46,.37,open),mix(.32,.22,open),.42,0,base*(1-open*.4));
+        addField(scene,mix(.71,1.09,open),mix(.65,.77,open),mix(.32,.22,open),.42,1,base*(1-open*.4));
       } else {
-        addField(scene,mix(.43,.16,open),.5,.24,.3,0,base*.86);
-        addField(scene,mix(.57,.84,open),.5,.24,.3,1,base*.86);
+        addField(scene,mix(.43,.14,open),.51,mix(.13,.17,open),.36,0,base);
+        addField(scene,mix(.57,.86,open),.51,mix(.13,.17,open),.36,1,base);
       }
       break;
     case 'alternate': {
-      const left=pulse(p,.24,.17),right=pulse(p,.58,.17),end=ease((p-.75)/.25);
-      addField(scene,.25,.53,.25,.3,0,base*(.3+left*.7+end*.18));
-      addField(scene,.75,.53,.25,.3,1,base*(.3+right*.7+end*.18));
+      const left=pulse(p,.23,.17),right=pulse(p,.6,.17),end=ease((p-.78)/.22);
+      addField(scene,.28,.45,.21,.31,0,base*(.22+left*.95+end*.28));
+      addField(scene,.74,.64,.21,.31,1,base*(.22+right*.95+end*.28));
       break;
     }
     case 'blend':
       if(type==='empathize') {
-        const connected=ease((p-.18)/.7);
-        addField(scene,mix(.08,.27,connected),.6,mix(.24,.38,connected),.31,0,base*.85);
-        addField(scene,mix(.94,.73,connected),.58,mix(.24,.38,connected),.33,1,base*.8);
-        addBand(scene,.59,mix(.025,.16,connected),0,2,connected*base*.43);
+        const connected=ease((p-.22)/.7);
+        addField(scene,mix(.09,.33,connected),.62,mix(.22,.28,connected),.3,0,base*.95);
+        addField(scene,mix(.91,.67,connected),.47,mix(.22,.28,connected),.3,1,base*.9);
+        addStroke(scene,.27,.6,.73,.49,mix(.025,.12,connected),2,connected*base*.68);
       } else {
-        restingFields(scene,phase,0,base*.65);
-        addField(scene,mix(.32,.7,open),mix(.7,.46,open),mix(.17,.34,open),.27,2,base*.7);
-        addField(scene,mix(.78,.3,open),.58,.25,.32,0,base*.6);
+        restingFields(scene,phase,0,base*.78);
+        addBand(scene,mix(-.22,1.62,open),.17,.65,2,base*1.15*Math.sin(Math.PI*p));
+        addField(scene,mix(-.17,1.17,open),mix(.13,.88,open),.2,.23,0,base*.62*Math.sin(Math.PI*p));
       }
       break;
     case 'settle': {
@@ -111,35 +125,46 @@ function primitiveScene(primitive,{p,clock,phase,amp,energy,type}) {
       const integrated=1-(1-p)**3;
       const settledPhase=phase+integrated*amp*1.6;
       if(type==='soothe') {
-        const irregular=Math.sin(clock*1.8+phase)*movement*amp*.12;
-        addBand(scene,.16+Math.sin(settledPhase)*.055+irregular,.23+open*.025,-.12+irregular,0,base*.76);
-        addBand(scene,.83+Math.cos(settledPhase)*.055-irregular,.25,.12-irregular,1,base*.72);
-        addField(scene,.56,.91,.32,.24,2,base*.3);
+        const irregular=Math.sin(clock*2.4+phase)*movement*amp*.2;
+        addBand(scene,.27+irregular,.18+open*.025,-.32*movement+irregular,0,base*.95);
+        addBand(scene,.79-irregular,.2,.3*movement-irregular,1,base*.9);
+        addField(scene,.58+irregular,.55,.15,.14,2,base*.4*movement);
       } else if(type==='wait') {
-        addField(scene,.26+Math.sin(settledPhase)*amp*.08,.58,.31,.32,0,base);
-        addField(scene,.93,.83,.34,.32,1,base*.3);
-      } else restingFields(scene,settledPhase,amp*.5,base);
+        const gathered=ease(p/.8);
+        addField(scene,mix(.16,.5,gathered),mix(.64,.58,gathered),mix(.19,.3,gathered),.29,0,base*1.05);
+        addField(scene,mix(.85,.55,gathered),mix(.4,.58,gathered),.19,.23,1,base*.72*(1-gathered));
+        addField(scene,.5,.58,.17,.17,0,base*.25*gathered);
+      } else {
+        addField(scene,.06+Math.sin(settledPhase)*amp*.2,.43+Math.cos(settledPhase)*amp*.2,.3,.39,0,base);
+        addField(scene,.94+Math.cos(settledPhase*.83)*amp*.18,.72+Math.sin(settledPhase*.83)*amp*.18,.29,.39,1,base*.95);
+        addField(scene,.57,.99,.29,.22,2,base*.32);
+      }
       break;
     }
     case 'interrupt_return': {
-      restingFields(scene,phase,0,base*.42);
+      restingFields(scene,phase,0,base*.38);
       let x,strength=1;
-      if(p<.36) x=mix(.14,.62,ease(p/.36));
-      else if(p<.5) {x=.62;strength=.12;}
-      else x=mix(.62,.14,ease((p-.5)/.5));
-      addField(scene,x,.52,.2,.17,0,base*strength);
-      addField(scene,x-.13,.54,.1,.15,1,base*.5*strength);
+      if(p<.36) x=mix(.1,.79,ease(p/.36));
+      else if(p<.5) {x=.79;strength=.16;}
+      else x=mix(.79,.13,ease((p-.5)/.5));
+      addField(scene,x,.55,.16,.15,0,base*1.1*strength);
+      if(p>=.36&&p<.5) {
+        addStroke(scene,.28,.56,.43,.56,.065,1,base*.55);
+        addStroke(scene,.63,.56,.77,.56,.065,1,base*.55);
+      } else addStroke(scene,clamp(x-.24,.08,.78),.56,x,.56,.065,1,base*.65);
       break;
     }
     case 'local_echo': {
       restingFields(scene,phase,0,base*.66);
       if(type==='notify') {
-        const strength=pulse(p,.24,.09)+pulse(p,.57,.09);
-        addField(scene,.74,.49,.2,.21,0,base*.95*strength);
+        const strength=pulse(p,.24,.12)+pulse(p,.62,.12);
+        addRing(scene,.74,.49,.15+strength*.065,.075,0,base*1.1*strength);
+        addField(scene,.74,.49,.11,.12,1,base*.38*strength);
       } else {
         const angle=TAU*ease(p),fade=Math.sin(Math.PI*p);
-        addField(scene,.72+Math.cos(angle)*amp*.11,.61+Math.sin(angle)*amp*.1,.15,.14,0,base*.9*fade);
-        addField(scene,.72,.61,.12+fade*.1,.11+fade*.1,1,base*.38*fade);
+        const radius=amp*(.18+.05/.48);
+        addField(scene,.7+Math.cos(angle)*radius,.61+Math.sin(angle)*radius,.145,.14,0,base*1.12*fade);
+        addRing(scene,.7,.61,radius,.065,1,base*.35*fade);
       }
       break;
     }
@@ -173,7 +198,10 @@ export function renderFrame(plan = {}, elapsedMs = 0, {reducedMotion=false,color
   const flowX=Math.sin(clock*1.55+phase)*sway,flowY=Math.cos(clock*1.3+phase)*sway*.8;
   for(const shape of scene) {
     if(shape.kind==='band')shape.position+=originY+flowY;
-    else {shape.x+=originX+flowX;shape.y+=originY+flowY;}
+    else {
+      shape.x+=originX+flowX;shape.y+=originY+flowY;
+      if(shape.kind==='stroke'){shape.x2+=originX+flowX;shape.y2+=originY+flowY;}
+    }
   }
   const selected=Array.isArray(colors)&&colors.length ? colors : selectPalette(plan);
   const palette=selected.slice(0,4).map(color=>Array.from({length:3},(_,i)=>clamp(number(color?.[i],240),0,255)));
@@ -184,8 +212,15 @@ export function renderFrame(plan = {}, elapsedMs = 0, {reducedMotion=false,color
     for(const shape of scene) {
       let weight;
       if(shape.kind==='field') weight=gaussian(nx,ny,shape);
-      else if(shape.kind==='ring') weight=Math.exp(-(((Math.hypot(nx-shape.x,ny-shape.y)-shape.radius)/shape.width)**2)*1.6);
-      else {
+      else if(shape.kind==='ring'||shape.kind==='arc') {
+        weight=Math.exp(-(((Math.hypot(nx-shape.x,ny-shape.y)-shape.radius)/shape.width)**2)*1.6);
+        if(shape.kind==='arc')weight*=ease((Math.cos(Math.atan2(ny-shape.y,nx-shape.x)-shape.direction)+.25)/1.25);
+      } else if(shape.kind==='stroke') {
+        const dx=shape.x2-shape.x,dy=shape.y2-shape.y;
+        const along=clamp(((nx-shape.x)*dx+(ny-shape.y)*dy)/(dx*dx+dy*dy||1));
+        const distance=Math.hypot(nx-(shape.x+along*dx),ny-(shape.y+along*dy));
+        weight=Math.exp(-((distance/shape.width)**2)*1.6);
+      } else {
         const distance=ny*Math.cos(shape.angle)+nx*Math.sin(shape.angle)-shape.position;
         weight=Math.exp(-((distance/shape.width)**2)*1.6);
       }

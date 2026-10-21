@@ -32,28 +32,30 @@ On AI failure the light plays a separate interrupted-return gesture, offers **Re
 
 All 20 responses can be previewed without AI. Each catalog entry includes a design hypothesis, not a claim of proven comprehension.
 
+Version 2.1 gives each response a more distinct path, composition and rhythm, with modestly stronger movement and shorter transitions. Everyday palettes use brighter chromatic pastels in place of muted gray mixtures. Celebrate keeps its original yellow/pink/peach palette, three expanding ripples and timing.
+
 | ID | Internal name | Signature / ending |
 | --- | --- | --- |
-| B01 | idle | Very slow drift; stays available |
-| B02 | acknowledge | One short local pass; receipt without agreement |
-| B03 | processing | Restrained local loop only while a real request is pending |
-| B04 | greet | One outward wave; returns to idle |
-| B05 | affirm | Two regions join; accepts a known choice |
-| B06 | decline | Regions separate and settle |
-| B07 | clarify | Two regions alternate once; waits still |
-| B08 | wait | Movement comes to rest; leaves room |
-| B09 | notify | Two local increases; ends |
-| B10 | complete | Dispersed regions consolidate |
+| B01 | idle | Slow edge wandering; stays available |
+| B02 | acknowledge | One short slanted pass; receipt without agreement |
+| B03 | processing | Two compact orbiting fields only while a real request is pending |
+| B04 | greet | One outward open arc; returns to idle |
+| B05 | affirm | Two sides join through a visible bridge; accepts a known choice |
+| B06 | decline | Two upright fields part like gates and settle |
+| B07 | clarify | Two offset regions alternate once; waits still |
+| B08 | wait | Two areas gather into one quiet central pool |
+| B09 | notify | Two local halos; ends |
+| B10 | complete | Three regions dock together below the center |
 | B11 | farewell | Slow retreat into the base; returns to idle |
 | B12 | error | One interruption and return; retry available |
-| R01 | empathize | Pause, then regions gradually connect; holds |
-| R02 | accompany | Broad low-frequency bands; continues when invited |
-| R03 | soothe | Irregularity becomes organized; holds |
-| R04 | encourage | Progressive directional expansion; supports an upcoming action |
+| R01 | empathize | Pause, then regions approach with a connecting stroke; holds |
+| R02 | accompany | Traveling parallel breathing bands; continues when invited |
+| R03 | soothe | Irregular angled flow settles into horizontal bands; holds |
+| R04 | encourage | Three connected rising steps; supports an upcoming action |
 | R05 | celebrate | Three controlled openings; brief, then idle |
-| R06 | receive_thanks | Small local return in the same palette; restores prior stable state |
-| R07 | withdraw | Motion diminishes to stillness; preserves color |
-| R08 | repair | Interrupts and changes parameters; remembers session feedback |
+| R06 | receive_thanks | One small local circuit in the same palette; restores prior stable state |
+| R07 | withdraw | Edge motion decelerates to stillness; preserves color |
+| R08 | repair | Diagonal sweep replaces the field; remembers session feedback |
 
 A negative self-judgment routes to empathize, never agreement. General knowledge and unknowable future outcomes route to clarify rather than arbitrary yes/no. An explicit request for solitude takes priority over anxiety or other emotion words. Thanks after withdrawal returns to stillness. Returning or inviting company can start interaction again.
 
