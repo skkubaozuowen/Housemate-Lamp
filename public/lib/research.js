@@ -10,7 +10,7 @@ function download(name, data) {
 }
 export function setupResearch(controller, renderer, { aiAvailable = false, simulateFailure } = {}) {
   const panel = $('research'), form = $('parameters');
-  let selectedType = 'idle', draftPlan = controller.plan, draftTouched = false, renderedPlan, sceneCount = -1;
+  let selectedType = 'idle', draftPlan = controller.plan, draftTouched = false, renderedPlan, sceneCount = -1, lastMoment = controller.lastText;
   const notify = message => { $('panel-status').textContent = message; };
   const library = $('response-library');
   for (const type of RESPONSE_TYPES) {
@@ -58,8 +58,12 @@ export function setupResearch(controller, renderer, { aiAvailable = false, simul
   $('restore-defaults').addEventListener('click', () => { controller.preferences = normalizePreferences({}); draftTouched = true; draftPlan = createPlan(selectedType, { seed: 1827 }); writeControls(draftPlan); controller.preview(draftPlan); notify('Default study restored; session preferences released.'); });
   $('save-palette').addEventListener('click', () => {
     const p = readControls();
-    controller.preferences = normalizePreferences({ ...controller.preferences, lockedPalette: { paletteFamily:p.paletteFamily, paletteVariant:p.paletteVariant, colorCount:p.colorCount } });
-    draftTouched = true; draftPlan = p; controller.preview(p); notify('Palette kept for this session. Explicit dislikes still take priority.');
+    const tags = PALETTE_FAMILIES[p.paletteFamily].tags;
+    controller.preferences = normalizePreferences({ ...controller.preferences,
+      avoidedColors:controller.preferences.avoidedColors.filter(color => !tags.includes(color)),
+      rejectedPalettes:controller.preferences.rejectedPalettes.filter(family => family !== p.paletteFamily),
+      lockedPalette: { paletteFamily:p.paletteFamily, paletteVariant:p.paletteVariant, colorCount:p.colorCount } });
+    draftTouched = true; draftPlan = p; controller.preview(p, { replacePalette:false }); notify('Palette kept. A new color request can replace it.');
   });
   $('release-palette').addEventListener('click', () => { controller.preferences = normalizePreferences({}); controller.emit(); notify('Color and movement preferences released.'); });
   $('view').addEventListener('change', () => renderer.setGrid($('view').value === 'grid'));
@@ -82,6 +86,7 @@ export function setupResearch(controller, renderer, { aiAvailable = false, simul
   if (new URLSearchParams(location.search).get('research') === '1') panel.showModal();
   return state => {
     $('phase').textContent = state.phase;
+    if (state.lastText !== lastMoment) { notify(''); lastMoment = state.lastText; }
     $('source').textContent = state.source.replaceAll('_', ' ');
     $('paused-state').textContent = state.paused ? 'display paused' : '';
     $('understanding').value = state.mode;
@@ -97,7 +102,7 @@ export function setupResearch(controller, renderer, { aiAvailable = false, simul
     $('hypothesis').textContent = `Design hypothesis · ${draftInfo.hypothesis}`;
     for (const button of library.querySelectorAll('button')) button.setAttribute('aria-pressed', String(button.dataset.type === selectedType));
     const prefs = state.preferences;
-    $('preference-info').textContent = [prefs.lockedPalette ? 'Palette kept.' : 'Palette can evolve.', prefs.avoidedColors?.length ? `Avoiding ${prefs.avoidedColors.join(', ')}.` : '', `Motion ×${prefs.speedScale.toFixed(2)}.`].filter(Boolean).join(' ');
+    $('preference-info').textContent = [prefs.lockedPalette ? 'Palette kept.' : 'Palette can evolve.', prefs.avoidedColors?.length ? `Avoiding ${prefs.avoidedColors.join(', ')}.` : '', prefs.rejectedPalettes?.length ? `Skipping ${prefs.rejectedPalettes.length} declined palette${prefs.rejectedPalettes.length === 1 ? '' : 's'}.` : '', `Motion ×${prefs.speedScale.toFixed(2)}.`].filter(Boolean).join(' ');
     $('feedback-count').textContent = state.feedback.length ? `${state.feedback.length} note${state.feedback.length === 1 ? '' : 's'} in this session.` : 'No notes yet.';
     if (state.savedScenes.length !== sceneCount) {
       sceneCount = state.savedScenes.length;

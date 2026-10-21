@@ -1,6 +1,6 @@
-# Prototype validation · 2026-10-21
+# Prototype validation
 
-## Automated checks actually run
+## Initial automated checks · 2026-10-21
 
 `npm test`: **36 passed, 0 failed** on Node 24.21.0. No dependency installation or build is necessary. Local HTTP integration tests require permission to bind a loopback port in the Codex sandbox; the complete suite was run successfully with that permission.
 
@@ -43,3 +43,16 @@ No physical LED matrix is connected. Diffusion is an approximation produced from
 - Export plan downloaded a valid JSON file. It contains only the versioned light-plan fields and no text/history field.
 - Simulated failure visibly showed the failure-preview label, interrupted-return state and Retry AI button. Retry cleared the banner and completed into a waiting-for-input light state.
 - Final multilingual refinements also tested: “keep this one” / “就保持这样” / “이대로” keep the current palette; “don't leave me alone” invites company; “tired” does not become a red-color ban.
+
+## Color correction update · 2026-10-22
+
+`npm test`: **55 passed, 0 failed**, including HTTP integration; changed JavaScript syntax checks and `git diff --check` passed. The original interaction/renderer/cancellation checks remain included.
+
+- Current-color rejection is a deterministic local R08, including after keeping a palette; replacement is selected by actual RGB/hue difference and remembered across later turns.
+- Seven single-hue palettes are verified through all variants and the actual white-mixed RGB rendering. A separate gray family makes all-hue exclusion reproducible from an exported plan alone.
+- Combined bans, positive selection and motion feedback work in one turn; contrastive wording such as “Use blue, not pink” does not reverse the desired hue. Representative unrelated clothing/color-metaphor statements do not alter color preferences.
+- Named requests replace old locks and conflicting older dislikes. An older pending AI response cannot undo a newer correction. Manual previews override an old palette lock; saved-scene restoration retains saved preferences.
+- Real local HTTP chain: “换成蓝色” → “保持现在的颜色” → “不要这个颜色” → “不要蓝色改成粉色，慢一点”. The corrections returned `local_rule`; actual swatches changed blue → warm coral → pink, with speed scale 0.65. A following real OpenAI request, “今天过得很开心”, returned `source:ai`, `celebrate`, and retained the requested pink and speed preference.
+- In-app Chromium browser: verified manual pink preview overriding a blue lock, then keeping pink and sending “不要这个颜色” visibly changed it to warm coral. Verified the combined no-blue/pink/slower input against the current-plan JSON, actual swatches and preference text. Captured before/after screenshots in `/private/tmp/housemate-color-before.png` and `/private/tmp/housemate-color-rejected.png`.
+
+This update repairs direct color control. Multi-emotion weights, unrestricted color generation and the previously discussed R03/R04 priority are not implemented by this patch.

@@ -1,6 +1,6 @@
 import { createPlan } from './catalog.js';
 import { planLocal, normalizePlan, validatePlan, normalizePreferences, applyPreferences } from './planner.js';
-import { selectPalette } from './palettes.js';
+import { PALETTE_FAMILIES, selectPalette, isPaletteAllowed, resolvePaletteFamily } from './palettes.js';
 
 /** Coordinates one request and one rendering timeline. No transcript is persisted. */
 export class SessionController {
@@ -35,6 +35,11 @@ export class SessionController {
   emit() { this.onChange(this.snapshot()); }
   display(plan) {
     this.plan = normalizePlan(plan);
+    // The exported/current plan must describe the palette actually on screen,
+    // including a session lock or a fallback after a declined color.
+    const lock = this.preferences.lockedPalette;
+    if (lock && isPaletteAllowed(lock.paletteFamily, this.preferences)) Object.assign(this.plan, lock);
+    this.plan.paletteFamily = resolvePaletteFamily(this.plan, this.preferences) || 'neutral_gray';
     this.renderer.setPlan(this.plan, { colors: selectPalette(this.plan, this.preferences) });
     this.emit();
   }
@@ -176,12 +181,21 @@ export class SessionController {
     this.phase = 'idle';
     this.display(this.stablePlan || createPlan('idle'));
   }
-  preview(plan) {
+  preview(plan, { replacePalette = true } = {}) {
     this.cancel();
     this.fallback = null;
     this.phase = 'preview';
     this.source = 'preview';
-    this.display(normalizePlan(plan));
+    const preview = normalizePlan(plan);
+    if (replacePalette) {
+      // A deliberate study preview is also a new color choice. Old session
+      // locks must not silently make the controls preview a different palette.
+      const tags = PALETTE_FAMILIES[preview.paletteFamily].tags;
+      this.preferences = normalizePreferences({ ...this.preferences, lockedPalette:null,
+        avoidedColors:this.preferences.avoidedColors.filter(color => !tags.includes(color)),
+        rejectedPalettes:this.preferences.rejectedPalettes.filter(family => family !== preview.paletteFamily) });
+    }
+    this.display(preview);
   }
   stopPreview() {
     this.cancel();
@@ -214,7 +228,7 @@ export class SessionController {
     const scene = this.savedScenes[index];
     if (!scene) return;
     this.preferences = normalizePreferences(scene.preferences);
-    this.preview(scene.plan);
+    this.preview(scene.plan, { replacePalette:false });
   }
   recordFeedback(rating, note = '') {
     this.feedback.push({ rating, note: note.slice(0, 1000), plan: structuredClone(this.plan),

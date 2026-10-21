@@ -5,6 +5,7 @@ import http from 'node:http';
 import { createServer } from '../server.js';
 import { createPlan } from '../public/lib/catalog.js';
 import { validatePlan } from '../public/lib/planner.js';
+import { selectPalette, colorGroup } from '../public/lib/palettes.js';
 
 async function fixture(t, options = {}) {
   const server = createServer(options);
@@ -113,4 +114,20 @@ test('AI suggestions retain catalog shape, closure and finite gesture timing', a
   assert.equal(result.mode,'ai'); assert.equal(result.plan.motionPrimitive,'blend');
   assert.equal(result.plan.loop,false); assert.equal(result.plan.nextState,'hold');
   assert.ok(result.plan.durationMs<=6500);
+});
+
+test('HTTP color corrections supersede locks and compose bans, target hue and motion without AI', async t => {
+  let upstreamCalls=0;
+  const {post}=await fixture(t,{keyProvider:async()=>'test-key',fetchImpl:async()=>{upstreamCalls++; throw new Error('Color commands must stay local');}});
+  const currentPlan=createPlan('accompany',{paletteFamily:'mist_blue',paletteVariant:'balanced',colorCount:3,seed:12});
+  const preferences={lockedPalette:{paletteFamily:'mist_blue',paletteVariant:'balanced',colorCount:3}};
+  const rejected=await (await post({text:'不要这个颜色',mode:'ai',context:{currentPlan,preferences,stableState:'accompany'}})).json();
+  assert.equal(rejected.source,'local_rule'); assert.equal(rejected.plan.responseType,'repair');
+  assert.equal(rejected.preferences.lockedPalette,null);
+  assert.notDeepEqual(selectPalette(rejected.plan,rejected.preferences),selectPalette(currentPlan,preferences));
+  const pink=await (await post({text:'不要蓝色改成粉色，慢一点',mode:'ai',context:{currentPlan,preferences,stableState:'accompany'}})).json();
+  assert.deepEqual(pink.preferences.avoidedColors,['blue']);
+  assert.ok(pink.preferences.speedScale<1);
+  assert.ok(selectPalette(pink.plan,pink.preferences).every(color=>colorGroup(color)==='pink'));
+  assert.ok(validatePlan(pink.plan)); assert.equal(upstreamCalls,0);
 });

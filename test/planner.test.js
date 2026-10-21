@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPlan } from '../public/lib/catalog.js';
-import { PALETTE_FAMILIES } from '../public/lib/palettes.js';
+import { PALETTE_FAMILIES, NAMED_COLOR_FAMILIES, selectPalette, resolvePaletteFamily, isPaletteAllowed } from '../public/lib/palettes.js';
 import { PLAN_SCHEMA, validatePlan, normalizePlan, normalizePreferences, applyPreferences, planLocal } from '../public/lib/planner.js';
 
 test('representative Chinese, English and Korean expressions route by purpose', () => {
@@ -101,11 +101,132 @@ test('strict schema rejects unknown, malformed, missing and out-of-range values'
     assert.equal(validatePlan(invalid), false);
     assert.equal(validatePlan(normalizePlan(invalid)), true);
   }
-  assert.deepEqual(normalizePreferences({ avoidedColors: ['blue', 'script', 'blue'], lockedPalette: {paletteFamily:'bad'}, speedScale: -20 }), { avoidedColors: ['blue'], lockedPalette: null, speedScale: .2, amplitudeScale: 1 });
+  assert.deepEqual(normalizePreferences({ avoidedColors: ['blue', 'script', 'blue'], rejectedPalettes: ['bad', 'mist_blue', 'mist_blue', 2], lockedPalette: {paletteFamily:'bad'}, speedScale: -20 }), { avoidedColors: ['blue'], rejectedPalettes: ['mist_blue'], lockedPalette: null, speedScale: .2, amplitudeScale: 1 });
 });
 
 test('finite gestures cannot gain infinite loops through plan parameters', () => {
   const plan = applyPreferences(createPlan('celebrate', { loop: true }), {});
   assert.equal(plan.loop, false);
   assert.equal(planLocal('你好', { currentPlan: createPlan('idle', { seed: 4 }) }).plan.seed, planLocal('你好', { currentPlan: createPlan('idle', { seed: 4 }) }).plan.seed);
+});
+
+test('rejecting the current color overrides its lock and stays rejected in later turns', () => {
+  const currentPlan = createPlan('accompany', { paletteFamily: 'lilac_blush', seed: 77 });
+  const preferences = normalizePreferences({ lockedPalette: { paletteFamily: 'lilac_blush', paletteVariant: 'balanced', colorCount: 3 } });
+  for (const text of ['不要这个颜色', '这个配色我不喜欢', '换个颜色', "I don't like this color", "I don't want this color", 'I dislike this color', '别用这个配色', '不用这个颜色', '이 색 말고']) {
+    const result = planLocal(text, { currentPlan, preferences, stableState: 'accompany' });
+    assert.equal(result.priority, true, text);
+    assert.equal(result.plan.responseType, 'repair', text);
+    assert.equal(result.preferences.lockedPalette, null, text);
+    assert.deepEqual(result.preferences.rejectedPalettes, ['lilac_blush'], text);
+    assert.notEqual(result.plan.paletteFamily, 'lilac_blush', text);
+    assert.notDeepEqual(selectPalette(result.plan, result.preferences), selectPalette(currentPlan, preferences), text);
+    for (const later of ['今天生日', '陪我待一会儿', '谢谢']) {
+      const next = planLocal(later, { currentPlan: result.plan, preferences: result.preferences });
+      assert.notEqual(next.plan.paletteFamily, 'lilac_blush', later);
+      assert.equal(resolvePaletteFamily(next.plan, next.preferences), next.plan.paletteFamily, later);
+    }
+  }
+});
+
+test('rejection follows the palette actually shown when an old plan has different metadata', () => {
+  const currentPlan = createPlan('empathize', { paletteFamily: 'mauve_sand' });
+  const preferences = normalizePreferences({ lockedPalette: { paletteFamily: 'mist_blue', paletteVariant: 'accented', colorCount: 2 } });
+  const result = planLocal('不要这个颜色', { currentPlan, preferences });
+  assert.deepEqual(result.preferences.rejectedPalettes, ['mist_blue']);
+  assert.notEqual(result.plan.paletteFamily, 'mist_blue');
+  assert.notDeepEqual(selectPalette(result.plan, result.preferences), selectPalette(currentPlan, preferences));
+});
+
+test('explicit named colors deterministically replace old locks, bans and rejections', () => {
+  const currentPlan = createPlan('accompany', { paletteFamily: 'lilac_blush' });
+  const preferences = normalizePreferences({ avoidedColors: ['blue'], rejectedPalettes: [NAMED_COLOR_FAMILIES.blue], lockedPalette: { paletteFamily: 'peach_amber', paletteVariant: 'misted', colorCount: 3 } });
+  for (const [text, hue] of [['我要蓝色', 'blue'], ['要蓝色', 'blue'], ['换成红色', 'red'], ['change the color to blue', 'blue'], ['make it pink', 'pink'], ['파란색으로 바꿔줘', 'blue']]) {
+    const result = planLocal(text, { currentPlan, preferences });
+    const family = NAMED_COLOR_FAMILIES[hue];
+    assert.equal(result.priority, true, text);
+    assert.equal(result.plan.responseType, 'repair', text);
+    assert.equal(result.plan.paletteFamily, family, text);
+    assert.equal(result.preferences.lockedPalette.paletteFamily, family, text);
+    assert.ok(!result.preferences.avoidedColors.includes(hue), text);
+    assert.ok(!result.preferences.rejectedPalettes.includes(family), text);
+    const later = planLocal('今天生日', { currentPlan: result.plan, preferences: result.preferences });
+    assert.equal(later.plan.paletteFamily, family, text);
+    assert.equal(applyPreferences(createPlan('celebrate'), result.preferences).paletteFamily, family, text);
+  }
+});
+
+test('color bans, positive replacement and motion correction compose in one local repair', () => {
+  const currentPlan = createPlan('accompany', { paletteFamily: 'mist_blue', speed: .3, amplitude: .6 });
+  const preferences = normalizePreferences({ lockedPalette: { paletteFamily: 'mist_blue', paletteVariant: 'balanced', colorCount: 3 } });
+  for (const text of ['不要蓝色改成粉色，慢一点', '不要蓝色，改成粉色，慢一点', 'No blue, change the color to pink and slow down', '파란색 말고 분홍색으로 바꿔줘, 천천히']) {
+    const result = planLocal(text, { currentPlan, preferences });
+    assert.equal(result.plan.responseType, 'repair', text);
+    assert.equal(result.priority, true, text);
+    assert.deepEqual(result.preferences.avoidedColors, ['blue'], text);
+    assert.equal(result.plan.paletteFamily, NAMED_COLOR_FAMILIES.pink, text);
+    assert.equal(result.preferences.lockedPalette.paletteFamily, NAMED_COLOR_FAMILIES.pink, text);
+    assert.ok(result.plan.speed < currentPlan.speed, text);
+    assert.ok(result.plan.amplitude < currentPlan.amplitude, text);
+    assert.ok(result.plan.amplitude > 0, text);
+    const later = planLocal('陪我待一会儿', { currentPlan: result.plan, preferences: result.preferences });
+    assert.equal(later.plan.paletteFamily, NAMED_COLOR_FAMILIES.pink, text);
+    assert.ok(!PALETTE_FAMILIES[later.plan.paletteFamily].tags.includes('blue'), text);
+  }
+  const active = planLocal('换个颜色，太单调了，活跃一点', { currentPlan, preferences });
+  assert.equal(active.plan.responseType, 'repair');
+  assert.notEqual(active.plan.paletteFamily, 'mist_blue');
+  assert.ok(active.plan.speed > currentPlan.speed);
+  assert.ok(active.plan.amplitude > currentPlan.amplitude);
+});
+
+test('color words in feelings, possessions or unrelated dislikes do not change preferences', () => {
+  const currentPlan = createPlan('idle', { paletteFamily: 'lilac_blush' });
+  const preferences = normalizePreferences({});
+  for (const text of ['I feel blue', "I'm not blue", '我没有蓝色衣服', "I don't like being tired", "I don't like feeling blue", '我不喜欢蓝色衣服', '蓝色让我难过我不喜欢今天', 'Please change the color of my blue jacket']) {
+    const result = planLocal(text, { currentPlan, preferences });
+    assert.deepEqual(result.preferences, preferences, text);
+  }
+  const result = planLocal('Use blue without pink', { currentPlan });
+  assert.deepEqual(result.preferences.avoidedColors, ['pink']);
+  assert.equal(result.preferences.lockedPalette.paletteFamily, NAMED_COLOR_FAMILIES.blue);
+});
+
+test('contrastive color requests keep the desired hue and reject only its alternative', () => {
+  const currentPlan = createPlan('idle', { paletteFamily: 'lilac_blush' });
+  for (const text of ['我要蓝色不要粉色', '换成蓝色而不是粉色', 'Use blue not pink', 'Use blue instead of pink']) {
+    const result = planLocal(text, { currentPlan });
+    assert.equal(result.priority, true, text);
+    assert.equal(result.plan.responseType, 'repair', text);
+    assert.equal(result.plan.paletteFamily, NAMED_COLOR_FAMILIES.blue, text);
+    assert.equal(result.preferences.lockedPalette.paletteFamily, NAMED_COLOR_FAMILIES.blue, text);
+    assert.deepEqual(result.preferences.avoidedColors, ['pink'], text);
+  }
+  assert.deepEqual(planLocal('蓝色不要', { currentPlan }).preferences.avoidedColors, ['blue']);
+  assert.deepEqual(planLocal('파란색 말고', { currentPlan }).preferences.avoidedColors, ['blue']);
+});
+
+test('boundaries win over color commands and old rejection history rolls over without freezing', () => {
+  const currentPlan = createPlan('accompany', { paletteFamily: 'mist_blue' });
+  const boundary = planLocal('让我一个人待着，不要蓝色改成粉色', { currentPlan });
+  assert.equal(boundary.plan.responseType, 'withdraw');
+  assert.deepEqual(boundary.preferences.avoidedColors, []);
+  const preferences = normalizePreferences({ rejectedPalettes: Object.keys(PALETTE_FAMILIES).filter(family => family !== 'mist_blue') });
+  const result = planLocal('不要这个颜色', { currentPlan, preferences });
+  assert.ok(validatePlan(result.plan));
+  assert.notEqual(result.plan.paletteFamily, 'mist_blue');
+  assert.deepEqual(result.preferences.rejectedPalettes, ['mist_blue']);
+  assert.equal(isPaletteAllowed(result.plan.paletteFamily, result.preferences), true);
+});
+
+test('when every hue is excluded and only gray remains, rejection asks for a different choice honestly', () => {
+  const currentPlan = createPlan('idle', { paletteFamily: 'neutral_gray' });
+  const preferences = normalizePreferences({ avoidedColors: ['blue', 'pink', 'purple', 'green', 'orange', 'red', 'yellow'] });
+  const result = planLocal('不要这个颜色', { currentPlan, preferences });
+  assert.equal(result.plan.responseType, 'clarify');
+  assert.equal(result.understood, false);
+  assert.equal(result.plan.paletteFamily, 'neutral_gray');
+  assert.ok(validatePlan(result.plan));
+  assert.ok(!result.preferences.rejectedPalettes.includes('neutral_gray'));
+  assert.deepEqual(selectPalette(result.plan), selectPalette(result.plan, result.preferences));
 });

@@ -62,14 +62,18 @@ A negative self-judgment routes to empathize, never agreement. General knowledge
 The drawer is closed by default. It provides:
 
 - Twenty direct previews, replay and hold; design hypothesis for each response.
-- Eleven palette families × misted / balanced / accented variations, one to four visible colors and a reproducible seed.
+- Eleven mixed palette families, seven single-hue palettes for explicit color requests and an achromatic fallback, each with misted / balanced / accented variations, one to four visible tones and a reproducible seed.
 - Primitive, flow speed, amplitude, energy, duration, loop and color transition controls.
 - Diffusion / crisp matrix view. Both consume the same **768-byte RGB frame**; the matrix is not a downsampled screenshot.
 - Palette lock and release; session scenes with restore; current plan copy/export.
 - Session-only likes, dislikes and suggested changes, exported only when requested. Exports include settings and intentionally entered workshop notes; conversation text is never automatically attached.
 - AI/demo selection and simulated request failure.
 
-Explicit color dislikes override palette locks and avoid that hue family in later choices. Motion feedback affects later plans. A short thanks preserves color. New moment cancels requests and invalidates late responses, clears text, preferences, scene memories and workshop notes. No database, account, analytics SDK, microphone or hardware permission is required. Refreshing closes the session; nothing is written to localStorage.
+Color corrections run locally in both AI and demo mode. “不要这个颜色” / “I don't like this color” / “이 색 말고” release the old palette lock and select a visibly different allowed palette. Rejected palettes are skipped in subsequent choices. Direct requests such as “换成粉色” / “make it blue” choose and keep a single-hue pastel palette; a new explicit color request replaces a previous lock or conflicting old dislike. “不要蓝色改成粉色，慢一点” applies the ban, requested pink and motion change together. Named color requests currently support blue, pink, purple, green, orange, red and yellow; this is not unrestricted RGB or multi-emotion color mixing.
+
+Manual study previews also replace conflicting old color preferences so the selected palette is actually shown. Keeping a palette and restoring a saved scene retain the intended session preferences. If every chromatic hue is declined, a real gray palette keeps exported plans reproducible; a further rejection with no permitted alternative asks for clarification.
+
+Motion feedback affects later plans. A short thanks preserves color. New moment cancels requests and invalidates late responses, clears text, preferences, scene memories and workshop notes. No database, account, analytics SDK, microphone or hardware permission is required. Refreshing closes the session; nothing is written to localStorage.
 
 ## Code boundaries
 

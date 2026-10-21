@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {CATALOG,RESPONSE_TYPES,createPlan} from '../public/lib/catalog.js';
-import {PALETTE_FAMILIES,PALETTE_VARIANTS,selectPalette,colorGroup} from '../public/lib/palettes.js';
+import {PALETTE_FAMILIES,PALETTE_VARIANTS,NAMED_COLOR_FAMILIES,selectPalette,colorGroup} from '../public/lib/palettes.js';
 import {renderFrame,LightRenderer} from '../public/lib/renderer.js';
 
 const fixed = type => createPlan(type,{seed:4589,paletteFamily:'lilac_blush',paletteVariant:'balanced'});
@@ -51,7 +51,7 @@ test('finite gesture speed changes its bounded flow and seed varies the spatial 
 });
 
 test('every palette variant respects all declined hue groups, including a conflicting lock',()=>{
-  assert.equal(Object.keys(PALETTE_FAMILIES).length,11);
+  assert.equal(Object.keys(PALETTE_FAMILIES).length,19);
   const groups=['blue','pink','purple','green','yellow','orange','red'];
   const combinations=[...groups.map(group=>[group]),['blue','purple','pink'],groups];
   for(const family of Object.keys(PALETTE_FAMILIES)) for(const variant of PALETTE_VARIANTS) for(const avoidedColors of combinations) {
@@ -63,6 +63,21 @@ test('every palette variant respects all declined hue groups, including a confli
       assert.ok(color.every(value=>Number.isInteger(value)&&value>=0&&value<=255));
       assert.ok(!avoidedColors.includes(colorGroup(color)),`${family}/${variant} must avoid ${avoidedColors}`);
     }
+  }
+});
+
+test('named color remains recognizable after white-field mixing in the actual RGB frame',()=>{
+  for(const [hue,paletteFamily] of Object.entries(NAMED_COLOR_FAMILIES)) {
+    const plan=createPlan('repair',{paletteFamily,paletteVariant:'balanced',seed:1827});
+    const frame=renderFrame(plan,plan.durationMs);
+    let colored=0;
+    for(let i=0;i<frame.length;i+=3) {
+      const group=colorGroup(Array.from(frame.slice(i,i+3)));
+      if(group==='neutral')continue;
+      colored++;
+      assert.equal(group,hue,`${hue} should remain its requested hue after diffusion`);
+    }
+    assert.ok(colored>30,`${hue} must be visibly present rather than an all-white frame`);
   }
 });
 

@@ -1,5 +1,5 @@
 import { CATALOG, RESPONSE_TYPES, MOTION_PRIMITIVES, NEXT_STATES, createPlan } from './catalog.js';
-import { PALETTE_FAMILIES, PALETTE_VARIANTS } from './palettes.js';
+import { PALETTE_FAMILIES, PALETTE_VARIANTS, NAMED_COLOR_FAMILIES, isPaletteAllowed, resolvePaletteFamily, replacementPalette } from './palettes.js';
 
 export const PLAN_LIMITS = Object.freeze({
   colorCount: [1, 4], energy: [0, 1], speed: [0.05, 2], amplitude: [0, 1],
@@ -9,7 +9,7 @@ const INTEGER_FIELDS = new Set(['colorCount', 'durationMs', 'transitionMs', 'see
 const ENUM_FIELDS = { responseType: RESPONSE_TYPES, paletteFamily: Object.keys(PALETTE_FAMILIES), paletteVariant: PALETTE_VARIANTS, motionPrimitive: MOTION_PRIMITIVES, nextState: NEXT_STATES };
 const PLAN_FIELDS = ['version', ...Object.keys(ENUM_FIELDS), ...Object.keys(PLAN_LIMITS), 'loop', 'requiresUserInput'];
 const COLOR_NAMES = ['blue', 'pink', 'purple', 'green', 'orange', 'red', 'yellow', 'neutral'];
-export const DEFAULT_PREFERENCES = Object.freeze({ avoidedColors: [], lockedPalette: null, speedScale: 1, amplitudeScale: 1 });
+export const DEFAULT_PREFERENCES = Object.freeze({ avoidedColors: [], rejectedPalettes: [], lockedPalette: null, speedScale: 1, amplitudeScale: 1 });
 
 export const PLAN_SCHEMA = {
   type: 'object', additionalProperties: false,
@@ -46,23 +46,18 @@ export function normalizePreferences(raw = {}) {
   const lock = safe.lockedPalette;
   return {
     avoidedColors: [...new Set(Array.isArray(safe.avoidedColors) ? safe.avoidedColors.filter(color => COLOR_NAMES.includes(color)) : [])],
+    rejectedPalettes: [...new Set(Array.isArray(safe.rejectedPalettes) ? safe.rejectedPalettes.filter(family => typeof family === 'string' && Object.hasOwn(PALETTE_FAMILIES, family)) : [])],
     lockedPalette: lock && Object.hasOwn(PALETTE_FAMILIES, lock.paletteFamily) && PALETTE_VARIANTS.includes(lock.paletteVariant) && inRange(lock.colorCount, 'colorCount') ? { paletteFamily: lock.paletteFamily, paletteVariant: lock.paletteVariant, colorCount: lock.colorCount } : null,
     speedScale: Number.isFinite(safe.speedScale) ? clamp(safe.speedScale, 0.2, 2) : 1,
     amplitudeScale: Number.isFinite(safe.amplitudeScale) ? clamp(safe.amplitudeScale, 0.1, 2) : 1
   };
 }
-function paletteAllowed(family, prefs) {
-  return !PALETTE_FAMILIES[family]?.tags?.some(tag => prefs.avoidedColors.includes(tag));
-}
 export function applyPreferences(rawPlan, rawPreferences, currentPlan = null) {
   const plan = normalizePlan(rawPlan);
   const prefs = normalizePreferences(rawPreferences);
   const lock = prefs.lockedPalette;
-  if (lock && paletteAllowed(lock.paletteFamily, prefs)) Object.assign(plan, lock);
-  if (!paletteAllowed(plan.paletteFamily, prefs)) {
-    const currentFamily = currentPlan?.paletteFamily;
-    plan.paletteFamily = currentFamily && paletteAllowed(currentFamily, prefs) ? currentFamily : Object.keys(PALETTE_FAMILIES).find(family => paletteAllowed(family, prefs)) || 'neutral_haze';
-  }
+  if (lock && isPaletteAllowed(lock.paletteFamily, prefs)) Object.assign(plan, lock);
+  plan.paletteFamily = resolvePaletteFamily(plan, prefs) || resolvePaletteFamily(currentPlan || plan, { ...prefs, rejectedPalettes: [] }) || 'neutral_gray';
   plan.speed = clamp(plan.speed * prefs.speedScale, ...PLAN_LIMITS.speed);
   plan.amplitude = clamp(plan.amplitude * prefs.amplitudeScale, ...PLAN_LIMITS.amplitude);
   if (!['idle', 'acknowledge', 'processing', 'error', 'withdraw'].includes(plan.responseType)) plan.durationMs = clamp(Math.round(plan.durationMs / prefs.speedScale), ...PLAN_LIMITS.durationMs);
@@ -87,6 +82,36 @@ const colorTerms = {
   red: /红|紅|\bred\b|빨간|빨강|적색/i,
   yellow: /黄|黃|\byellow\b|노란|노랑/i
 };
+
+// Commands are scoped to each named color, so “no blue, use pink” does not reject both.
+// Color words in feelings, clothing, or facts do not on their own change preferences.
+function parseColorCommands(text) {
+  const commands = [];
+  for (const clause of text.split(/[,，。.!！;；]|\bbut\b|但是|但|不过|대신/iu)) {
+    const tokens = Object.entries(colorTerms).flatMap(([color, pattern]) => [...clause.matchAll(new RegExp(pattern.source, 'gi'))].map(match => ({ color, index: match.index, end: match.index + match[0].length }))).sort((a, b) => a.index - b.index);
+    const negative = [...clause.matchAll(/不喜欢|不喜歡|不要|别用|別用|避免|讨厌|討厭|不想(?:要|用)?|不用|而不是|不是|\b(?:don['’]t(?:\s+(?:want|like|use))?|do not(?:\s+(?:want|like|use))?|dislike|avoid|no(?:\s+more)?|not|without|instead of|hate|stop using)\b|싫|말고|빼|쓰지\s*마/gi)].map(match => ({ index: match.index, end: match.index + match[0].length, type: 'ban' }));
+    const positive = [...clause.matchAll(/我要|我想要|想要|换成|換成|改成|换为|改为|变成|變成|切换到|切換到|使用|给我|給我|用|要|\b(?:want|would like|change|switch|set|make|use|give me)\b/gi)].filter(match => !negative.some(event => match.index >= event.index && match.index < event.end)).map(match => ({ index: match.index, end: match.index + match[0].length, type: 'select' }));
+    const events = [...negative, ...positive].sort((a, b) => a.index - b.index);
+    for (let index = 0; index < tokens.length; index++) {
+      const token = tokens[index];
+      const suffix = clause.slice(token.end, tokens[index + 1]?.index ?? clause.length);
+      // An instruction about a blue jacket or buying red clothing is not a lamp instruction.
+      if (/^(?:色(?:的)?\s*)?(?:衣服|衣裳|衬衫|衬衣|裙|裤|鞋|外套|包|车|汽车)|^\s*(?:jacket|shirt|dress|clothes|clothing|shoes|car|bag)\b|^(?:색)?\s*(?:옷|셔츠|재킷|바지|신발)/i.test(suffix)) continue;
+      if (/\b(?:i['’]m|i am|i feel|i am feeling)\s+(?:not\s+)?$/i.test(clause.slice(0, token.index))) continue;
+      const before = events.filter(event => event.end <= token.index).at(-1);
+      if (before && /\b(?:feel|feeling|being|wear|wearing|buy|buying|own)\b|穿|购买|購買|买|옷을?\s*입/i.test(clause.slice(before.end, token.index))) continue;
+      // A negative before the next named hue belongs to that next hue. A genuine
+      // postfix refusal at the end (“蓝色不要”), or Korean “색 말고”, refers back.
+      const afterBan = (!tokens[index + 1] && /^(?:色)?\s*(?:我(?:也)?(?:不喜欢|不喜歡)|不喜欢|不喜歡|不要|不用)\s*$|^\s*(?:i\s+)?(?:dislike|hate)(?:\s+it)?\s*$/i.test(suffix)) || /^(?:색)?\s*(?:은|는|이|가|을|를)?\s*(?:싫|말고|별로|빼)/i.test(suffix);
+      const afterSelect = /(?:으로|로).{0,6}(?:바꿔|변경|해\s*줘|해주세요)|\bis fine\b|\binstead\b|就(?:可以|好)/i.test(suffix);
+      let type = before?.type;
+      if (afterBan && !afterSelect) type = 'ban';
+      else if (afterSelect) type = 'select';
+      if (type) commands.push({ color: token.color, type });
+    }
+  }
+  return commands;
+}
 const isQuestion = text => /[?？]|吗|嗎|是否|能不能|可不可以|할 수|인가|까요|나요|\b(can|could|will|would|is|are|do|does|what|why|how|when|where)\b/i.test(text);
 const stableReturn = context => NEXT_STATES.includes(context.stableState) ? context.stableState : 'idle';
 
@@ -94,10 +119,13 @@ export function planLocal(input, context = {}) {
   const text = typeof input === 'string' ? input.trim().slice(0, 2000) : '';
   const current = context.currentPlan ? normalizePlan(context.currentPlan) : null;
   const prefs = normalizePreferences(context.preferences);
+  const previousPreferences = normalizePreferences(prefs);
+  const currentFamily = current ? resolvePaletteFamily(current, prefs) : null;
+  const currentPalette = current ? { ...(prefs.lockedPalette && isPaletteAllowed(prefs.lockedPalette.paletteFamily, prefs) ? prefs.lockedPalette : current), paletteFamily: currentFamily || current.paletteFamily } : null;
   const seed = seedFromText(`${text}:${current?.seed || 0}`);
   let priority = false;
   let understood = true;
-  const keep = current ? { paletteFamily: current.paletteFamily, paletteVariant: current.paletteVariant, colorCount: current.colorCount } : {};
+  const keep = currentPalette ? { paletteFamily: currentPalette.paletteFamily, paletteVariant: currentPalette.paletteVariant, colorCount: currentPalette.colorCount } : {};
   const make = (type, overrides = {}) => {
     const plan = createPlan(type, { seed, paletteVariant: PALETTE_VARIANTS[seed % PALETTE_VARIANTS.length], ...overrides });
     return { plan: applyPreferences(plan, prefs, current), preferences: normalizePreferences(prefs), priority, understood };
@@ -112,29 +140,18 @@ export function planLocal(input, context = {}) {
     return make('withdraw', { ...keep, nextState: 'withdraw' });
   }
 
-  const colorBans = new Set();
-  for (const clause of text.split(/[,，。.!！;；]|\bbut\b|但是|但|不过|대신/iu)) {
-    if (/不喜欢|不喜歡|不要|别用|別用|避免|讨厌|討厭|\b(?:don't like|do not like|dislike|avoid|no|without|hate|stop using)\b|싫|말고|빼|쓰지\s*마/i.test(clause)) {
-      for (const [name, pattern] of Object.entries(colorTerms)) if (pattern.test(clause)) colorBans.add(name);
-    }
-  }
-  if (colorBans.size) {
-    priority = true;
-    for (const name of colorBans) if (!prefs.avoidedColors.includes(name)) prefs.avoidedColors.push(name);
-    if (prefs.lockedPalette && !paletteAllowed(prefs.lockedPalette.paletteFamily, prefs)) prefs.lockedPalette = null;
-    return make('repair', { ...keep, nextState: stableReturn(context) });
-  }
-  if (/保持.{0,5}(颜色|配色)|保留.{0,5}(颜色|配色)|就这个颜色|就保持这样|\b(?:keep|stay with|hold|save).{0,20}(?:colou?r|palette)\b|\b(?:keep this one|this one is fine)\b|이\s*(색|팔레트).{0,6}(유지|그대로)|색.{0,6}(유지|그대로)|이대로/i.test(text)) {
-    priority = true;
-    if (!current) { understood = false; return make('clarify'); }
-    prefs.lockedPalette = { ...keep };
-    return make('complete', { ...keep, nextState: stableReturn(context) });
-  }
+  const colorCommands = parseColorCommands(text);
+  const rejectCurrent = /(?:不要|别用|別用|不用)(?:这个|这套|这种|当前|现在的)(?:颜色|配色)|(?:这个|这套|这种|当前的?|现在的)(?:颜色|配色).{0,8}(?:不喜欢|不喜歡|不好看|不满意)|(?:不喜欢|不喜歡).{0,6}(?:这个|这套|当前的?)(?:颜色|配色)|\b(?:(?:don['’]t|do not) (?:like|want|use)|dislike|hate) (?:this|the current) (?:colou?r|palette)\b|\b(?:not|no more) (?:this|the current) (?:colou?r|palette)\b|이\s*(?:색|팔레트).{0,5}(?:말고|싫)/i.test(text);
+  const unrelatedColorObject = /\b(?:colou?r|palette) of .{0,60}\b(?:jacket|shirt|dress|clothes|clothing|shoes|car|bag)\b|(?:衣服|外套|裙子|裤子|鞋|包|汽车)(?:的)?(?:颜色|配色)/i.test(text);
+  const changeColor = !unrelatedColorObject && /换(?:个|一个|种|一种|套|一套)?(?:颜色|配色)|換(?:個|一個|種|一種|套|一套)?(?:顏色|配色)|\b(?:change|switch) (?:the |this |my )?(?:colou?r|palette)\b|\banother (?:colou?r|palette)\b|다른\s*(?:색|팔레트)/i.test(text);
+  const keepRequested = /保持.{0,5}(颜色|配色)|保留.{0,5}(颜色|配色)|就这个颜色|就保持这样|\b(?:keep|stay with|hold|save).{0,20}(?:colou?r|palette)\b|\b(?:keep this one|this one is fine)\b|이\s*(색|팔레트).{0,6}(유지|그대로)|색.{0,6}(유지|그대로)|이대로/i.test(text);
   const slower = /慢一点|慢点|慢一些|安静一点|太活跃|太快|太激烈|太吵|平静一点|\b(slower|slow down|too (?:active|fast|much)|less (?:movement|active)|quieter|calmer)\b|천천히|너무.{0,5}(활발|빠|시끄)|조용히|움직임.{0,4}줄/i.test(text);
   const moreActive = /太单调|太單調|太静|太静止|活跃一点|活泼一点|多动一点|\b(too (?:dull|still|plain)|more (?:active|movement|lively)|livelier)\b|너무.{0,4}(단조|정적)|더.{0,4}(활발|움직)/i.test(text);
-  const change = /不是这样|不是这样|不是这个|不对|不對|换一种|换一个|換一|不喜欢.{0,5}(颜色|配色)|\b(not like that|not this|something else|another (?:one|colou?r|palette)|change (?:it|the colou?r|palette))\b|이게\s*아니|그게\s*아니|다른\s*(색|걸|것)|바꿔/i.test(text);
-  if (slower || moreActive || change) {
+  const change = !unrelatedColorObject && /不是这样|不是这样|不是这个|不对|不對|换一种|换一个|換一|不喜欢.{0,5}(颜色|配色)|\b(not like that|not this|something else|another (?:one|colou?r|palette)|change (?:it|the colou?r|palette))\b|이게\s*아니|그게\s*아니|다른\s*(색|걸|것)|바꿔/i.test(text);
+  const colorRepair = colorCommands.length > 0 || rejectCurrent || changeColor;
+  if (slower || moreActive || change || colorRepair) {
     priority = true;
+    if (change && !colorRepair && !slower && !moreActive && /刚才说的|刚说|之前.{0,4}那个|\b(?:the one i (?:said|meant)|what i meant|the previous one)\b|아까.{0,6}(말|그)/i.test(text)) { understood = false; return make('clarify', keep); }
     const oldSpeedScale = prefs.speedScale;
     const oldAmplitudeScale = prefs.amplitudeScale;
     if (slower) { prefs.speedScale = clamp(prefs.speedScale * 0.65, 0.2, 2); prefs.amplitudeScale = clamp(prefs.amplitudeScale * 0.7, 0.1, 2); }
@@ -144,13 +161,49 @@ export function planLocal(input, context = {}) {
       overrides.speed = clamp(current.speed / oldSpeedScale, ...PLAN_LIMITS.speed);
       overrides.amplitude = clamp(current.amplitude / oldAmplitudeScale, ...PLAN_LIMITS.amplitude);
     }
-    if (change && !slower && !moreActive) {
-      if (/刚才说的|刚说|之前.{0,4}那个|\b(?:the one i (?:said|meant)|what i meant|the previous one)\b|아까.{0,6}(말|그)/i.test(text)) { understood = false; return make('clarify', keep); }
+    const chooseAnother = rejectCurrent || (changeColor && !colorCommands.some(command => command.type === 'select')) || (change && !colorRepair && !slower && !moreActive);
+    if (chooseAnother) {
       prefs.lockedPalette = null;
-      const allowed = Object.keys(PALETTE_FAMILIES).filter(family => family !== current?.paletteFamily && paletteAllowed(family, prefs));
-      overrides.paletteFamily = allowed[seed % Math.max(allowed.length, 1)] || 'neutral_haze';
+      if (currentFamily && !prefs.rejectedPalettes.includes(currentFamily)) prefs.rejectedPalettes.push(currentFamily);
+    }
+    for (const { type, color } of colorCommands) {
+      if (type === 'ban') {
+        if (!prefs.avoidedColors.includes(color)) prefs.avoidedColors.push(color);
+        if (prefs.lockedPalette && !isPaletteAllowed(prefs.lockedPalette.paletteFamily, prefs)) prefs.lockedPalette = null;
+      } else {
+        const family = NAMED_COLOR_FAMILIES[color];
+        prefs.avoidedColors = prefs.avoidedColors.filter(avoided => avoided !== color);
+        prefs.rejectedPalettes = prefs.rejectedPalettes.filter(rejected => rejected !== family);
+        prefs.lockedPalette = { paletteFamily: family, paletteVariant: 'balanced', colorCount: current?.colorCount || 3 };
+      }
+    }
+    if (chooseAnother && !prefs.lockedPalette) {
+      let replacement = replacementPalette(current || createPlan('idle', { seed }), prefs, previousPreferences);
+      if (!replacement) {
+        // After a full tour, forget older rejections while still declining the current field.
+        prefs.rejectedPalettes = currentFamily ? [currentFamily] : [];
+        replacement = replacementPalette(current || createPlan('idle', { seed }), prefs, previousPreferences);
+      }
+      if (!replacement) {
+        // There is no different color under the remaining hue constraints.
+        // Keep the available field and ask for a new choice instead of faking a repair.
+        prefs.rejectedPalettes = prefs.rejectedPalettes.filter(family => family !== currentFamily);
+        understood = false;
+        return make('clarify', { ...keep, paletteFamily: currentFamily || 'neutral_gray' });
+      }
+      overrides.paletteFamily = replacement;
+    }
+    if (prefs.lockedPalette) Object.assign(overrides, prefs.lockedPalette);
+    else if (keepRequested && !colorRepair && current) {
+      prefs.lockedPalette = { ...keep };
     }
     return make('repair', overrides);
+  }
+  if (keepRequested) {
+    priority = true;
+    if (!current) { understood = false; return make('clarify'); }
+    prefs.lockedPalette = { ...keep };
+    return make('complete', { ...keep, nextState: stableReturn(context) });
   }
 
   doNotLeave.lastIndex = 0;
