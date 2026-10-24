@@ -102,11 +102,12 @@ export class LampService {
     this.mapping = { ...DEFAULT_MAPPING }; this.frameCount = 0; this.lastAckAt = null; this.error = null;
     this.sequence = 0; this.lines = ''; this.pending = null; this.generation = 0; this.lastLeaseAt = 0;
     this.lastFrame = null; this.testColor = null; this.lastPingAt = 0;
+    this.liveLease = null;
   }
   status() {
     return { enabled:this.enabled, ports:this.ports, connected:this.connected, ready:this.ready, port:this.port,
       pixels:256, pin:6, maxBrightness:this.maxBrightness, brightness:this.brightness, mapping:{ ...this.mapping },
-      frameCount:this.frameCount, lastAckAt:this.lastAckAt, error:this.error, testColor:this.testColor };
+      frameCount:this.frameCount, lastAckAt:this.lastAckAt, error:this.error, testColor:this.testColor, leaseConnected:Boolean(this.liveLease) };
   }
   async getStatus() { if (this.enabled) this.ports = await this.scanPorts(); return this.status(); }
   authorize(token) {
@@ -204,6 +205,19 @@ export class LampService {
   }
   framePayload(frame) { return Buffer.concat([Buffer.from([this.brightness]), frame]); }
   heartbeat(token) { this.authorize(token); return this.status(); }
+  attachLease(token, close) {
+    this.authorize(token);
+    const previous = this.liveLease;
+    const lease = { close };
+    this.liveLease = lease;
+    // Set the new identity first: a late close from the replaced stream must
+    // not detach its replacement or revoke the current page's ownership.
+    try { previous?.close(); } catch { /* The old response may already be gone. */ }
+    return () => {
+      if (this.liveLease !== lease) return;
+      this.liveLease = null; this.lastLeaseAt = this.now();
+    };
+  }
   async configure(token, settings) {
     this.authorize(token);
     const { brightness, mapping } = settings || {};
@@ -228,7 +242,9 @@ export class LampService {
   }
   async tick() {
     if (!this.connected || this.control) return;
-    if (this.now() - this.lastLeaseAt > this.leaseMs) { await this.disconnectInternal('The page disconnected. Connect again to resume.'); return; }
+    // A live HTTP response follows the actual page connection. Unlike a JS
+    // timer, it is not paused merely because the page is in the background.
+    if (!this.liveLease && this.now() - this.lastLeaseAt > this.leaseMs) { await this.disconnectInternal('The page disconnected. Connect again to resume.'); return; }
     if (!this.pending && this.now() - this.lastPingAt >= 1000) {
       this.lastPingAt = this.now();
       try { await this.command('P'); } catch { this.fail('The Arduino stopped responding. Reconnect it.'); }
@@ -245,11 +261,33 @@ export class LampService {
   fail(message) { this.release(); this.error = message; }
   release() {
     ++this.generation; clearInterval(this.timer); this.timer = null;
+    const lease = this.liveLease; this.liveLease = null;
+    try { lease?.close(); } catch { /* Closing the board also ends ownership. */ }
     if (this.pending) { clearTimeout(this.pending.timer); this.pending.reject(new LampError('The USB session ended.')); this.pending = null; }
     this.transport?.close(); this.transport = null; this.token = null; this.connected = false; this.ready = false; this.connecting = false;
     this.port = null; this.testColor = null;
   }
   async shutdown() { if (this.transport && !this.control) await this.disconnectInternal(); else this.release(); }
+}
+
+function openLeaseResponse(req, res, service, token) {
+  if (req.aborted || res.destroyed) throw new LampError('The page connection was closed.', 400);
+  let timer;
+  const detach = service.attachLease(token, () => res.end());
+  const cleanup = () => { clearInterval(timer); detach(); };
+  res.once('close', cleanup);
+  res.once('error', () => { cleanup(); res.destroy(); });
+  res.setTimeout(0);
+  res.writeHead(200, { 'Content-Type':'text/event-stream; charset=utf-8', 'Cache-Control':'no-store', 'Connection':'keep-alive' });
+  res.flushHeaders();
+  res.write(': connected\n\n');
+  timer = setInterval(() => {
+    if (res.destroyed || res.writableEnded) { cleanup(); return; }
+    // A frozen reader cannot grow an unbounded server-side write buffer.
+    if (res.writableLength > 1024) { res.destroy(); return; }
+    res.write(': lamp\n\n');
+  }, 15000);
+  timer.unref();
 }
 
 export function isLocalLampRequest(req) {
@@ -281,6 +319,7 @@ export async function handleLampRequest(req, res, pathname, service, json) {
     let body;
     if (!binary) { try { body = JSON.parse(bytes.toString('utf8')); } catch { throw new LampError('Invalid request.', 400); } }
     const token = req.headers['x-lamp-token'];
+    if (pathname === '/api/lamp/lease') { openLeaseResponse(req, res, service, token); return; }
     let result;
     switch (pathname) {
       case '/api/lamp/connect': result = await service.connect(body?.port); break;

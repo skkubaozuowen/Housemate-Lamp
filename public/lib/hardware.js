@@ -7,11 +7,12 @@ export class LampBridge {
     this.fetcher = fetcher; this.timers = timers; this.now = now; this.onChange = onChange;
     this.status = { enabled:false, connected:false, ready:false, ports:[], frameCount:0, error:null };
     this.token = null; this.syncing = true; this.pending = null;
-    this.frameTimer = null; this.leaseTimer = null; this.inFlight = false; this.frameDone = null; this.commandBusy = false; this.leaseBusy = false;
+    this.frameTimer = null; this.inFlight = false; this.frameDone = null; this.commandBusy = false; this.leaseBusy = false;
+    this.leaseController = null; this.leaseReader = null; this.leaseHandshakeTimer = null; this.leaseConnected = false;
     this.lastFrameAt = -Infinity; this.generation = 0; this.destroyed = false;
   }
-  get active() { return Boolean(this.token && this.status.connected && this.status.ready && !this.destroyed); }
-  emit() { this.onChange({ ...this.status, active:this.active, syncing:this.syncing }); }
+  get active() { return Boolean(this.token && this.status.connected && this.status.ready && this.leaseConnected && !this.destroyed); }
+  emit() { this.onChange({ ...this.status, active:this.active, connecting:Boolean(this.token && this.status.connected && !this.leaseConnected), syncing:this.syncing }); }
   async request(path, { body, binary = false, token = this.token, keepalive = false } = {}) {
     const headers = {};
     if (token) headers['X-Lamp-Token'] = token;
@@ -45,13 +46,63 @@ export class LampBridge {
     if (generation !== this.generation || this.destroyed) return;
     if (!result.token || !result.ready || !result.connected) throw new Error('USB opened, but the lamp has not acknowledged its firmware.');
     this.token = result.token; this.syncing = true; this.apply(result);
-    this.leaseTimer = this.timers.setInterval(() => { void this.heartbeat(); }, 1000);
+    try { await this.openLease(generation); }
+    catch (error) {
+      if (generation !== this.generation || this.destroyed) return;
+      const token = this.token;
+      const failure = new Error(`The lamp's page connection could not start. ${error.message}`);
+      this.fail(failure);
+      // A successful serial connection must never be left without its owner.
+      try { await this.request('/disconnect', { body:{}, token }); } catch { /* The server also closes an expired or aborted lease. */ }
+      throw failure;
+    }
+  }
+  async openLease(generation) {
+    const controller = new AbortController();
+    this.leaseController = controller;
+    const timer = this.leaseHandshakeTimer = this.timers.setTimeout(() => controller.abort(), 5000);
+    try {
+      // This is intentionally not request(): a whole-request timeout would
+      // terminate a healthy streaming lease after a few seconds.
+      const response = await this.fetcher('/api/lamp/lease', {
+        method:'POST', headers:{ 'Content-Type':'application/json', 'X-Lamp-Token':this.token },
+        body:'{}', signal:controller.signal
+      });
+      this.timers.clearTimeout(timer);
+      if (this.leaseHandshakeTimer === timer) this.leaseHandshakeTimer = null;
+      if (generation !== this.generation || this.destroyed) { controller.abort(); return; }
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(typeof result.error === 'string' ? result.error : 'The local connection was refused.');
+      }
+      if (!response.headers?.get('content-type')?.startsWith('text/event-stream') || !response.body?.getReader) throw new Error('A persistent local connection is unavailable.');
+      const reader = response.body.getReader();
+      this.leaseReader = reader; this.leaseConnected = true; this.emit();
+      this.leaseTask = this.readLease(reader, generation);
+    } catch (error) { controller.abort(); throw error; }
+    finally {
+      this.timers.clearTimeout(timer);
+      if (this.leaseHandshakeTimer === timer) this.leaseHandshakeTimer = null;
+    }
+  }
+  async readLease(reader, generation) {
+    try {
+      for (;;) {
+        const { done } = await reader.read();
+        if (generation !== this.generation || this.destroyed) return;
+        if (done) throw new Error('The page connection ended. Connect the lamp again to resume.');
+      }
+    } catch (error) { if (generation === this.generation && !this.destroyed) this.fail(error); }
+    finally { reader.releaseLock(); }
   }
   endSession() {
     this.generation++; this.token = null; this.pending = null; this.lastFrameAt = -Infinity;
     if (this.frameTimer !== null) this.timers.clearTimeout(this.frameTimer);
-    if (this.leaseTimer !== null) this.timers.clearInterval(this.leaseTimer);
-    this.frameTimer = null; this.leaseTimer = null;
+    if (this.leaseHandshakeTimer !== null) this.timers.clearTimeout(this.leaseHandshakeTimer);
+    const controller = this.leaseController, reader = this.leaseReader;
+    this.frameTimer = null; this.leaseHandshakeTimer = null; this.leaseController = null; this.leaseReader = null; this.leaseConnected = false;
+    controller?.abort();
+    if (reader) void reader.cancel().catch(() => {});
   }
   fail(error) {
     this.endSession(); this.status = { ...this.status, connected:false, ready:false, error:error.message }; this.emit();
@@ -170,7 +221,7 @@ export function setupHardware(renderer, { document:doc = document, bridgeOptions
       if (doc.activeElement !== byId('lamp-rotation')) byId('lamp-rotation').value = String(state.mapping.rotation);
       if (doc.activeElement !== byId('lamp-mirror')) byId('lamp-mirror').checked = state.mapping.mirrorX;
     }
-    status.textContent = state.error ? state.error : !available ? 'USB control is available on the local computer only.' : active ? state.syncing ? 'Lamp connected · following this page' : 'Lamp connected · calibration held' : state.connected ? 'USB is in use by another page. Disconnect there first.' : 'Connect the USB board to start.';
+    status.textContent = state.error ? state.error : !available ? 'USB control is available on the local computer only.' : state.connecting ? 'Starting the lamp’s page connection…' : active ? state.syncing ? 'Lamp connected · following this page' : 'Lamp connected · calibration held' : state.connected ? 'USB is in use by another page. Disconnect there first.' : 'Connect the USB board to start.';
     status.dataset.state = state.error ? 'error' : active ? 'connected' : 'idle';
     details.textContent = active ? `${state.pixels || 256} pixels · D${state.pin || 6} · ${state.frameCount || 0} frames acknowledged${state.lastAckAt ? ' · Lamp responding' : ''}` : available ? 'Start at low brightness. Test one pixel, then sync the light.' : 'Open this project at localhost to connect the Arduino.';
   } });

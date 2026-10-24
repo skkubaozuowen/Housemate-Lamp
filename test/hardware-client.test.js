@@ -21,14 +21,31 @@ class Clock {
     this.time = end; await flush();
   }
 }
-function harness({ holdFrames = false, connectReady = true } = {}) {
-  const clock = new Clock(), calls = [], frames = [];
+function harness({ holdFrames = false, connectReady = true, badLease = false } = {}) {
+  const clock = new Clock(), calls = [], frames = [], leases = [];
   let count = 0;
   const status = { enabled:true, connected:true, ready:connectReady, ports:[{path:'/dev/cu.usbserial-test',label:'Arduino'}], pixels:256, pin:6, maxBrightness:3, brightness:3, frameCount:0, error:null };
   const response = body => ({ ok:true, json:async () => body });
   const fetcher = async (url, options) => {
     calls.push({ url, options, at:clock.time });
     if (url.endsWith('/connect')) return response({ ...status, token:'memory-only-token' });
+    if (url.endsWith('/lease')) {
+      if (badLease) return {ok:false,status:503,json:async () => ({error:'Streaming unavailable.'})};
+      const lease = {signal:options.signal,closed:false,cancelled:false};
+      const body = new ReadableStream({
+        start(controller) {
+          lease.controller = controller;
+          controller.enqueue(new TextEncoder().encode(': connected\n\n'));
+          options.signal.addEventListener('abort', () => {
+            if (!lease.closed) { lease.closed = true; controller.error(new DOMException('Aborted', 'AbortError')); }
+          }, {once:true});
+        },
+        cancel() { lease.cancelled = true; lease.closed = true; }
+      });
+      lease.close = () => { if (!lease.closed) { lease.closed = true; lease.controller.close(); } };
+      leases.push(lease);
+      return {ok:true,headers:new Headers({'Content-Type':'text/event-stream'}),body};
+    }
     if (url.endsWith('/disconnect')) return response({ ...status, connected:false, ready:false });
     if (url.endsWith('/frame')) {
       const ack = () => response({ ...status, frameCount:++count, lastAckAt:clock.time });
@@ -38,7 +55,7 @@ function harness({ holdFrames = false, connectReady = true } = {}) {
     return response({ ...status, frameCount:count });
   };
   const bridge = new LampBridge({ fetcher, timers:clock, now:() => clock.time });
-  return { bridge, clock, calls, frames };
+  return { bridge, clock, calls, frames, leases };
 }
 const frame = value => new Uint8Array(768).fill(value);
 
@@ -50,6 +67,10 @@ test('USB frames require an explicitly connected, acknowledged session', async (
   assert.equal(bridge.active, true);
   assert.equal('token' in bridge.status, false);
   assert.equal(calls[0].options.headers['X-Lamp-Token'], undefined);
+  const lease = calls.find(call => call.url.endsWith('/lease'));
+  assert.equal(lease.options.headers['X-Lamp-Token'], 'memory-only-token');
+  assert.equal(lease.options.method, 'POST');
+  assert.equal(lease.options.body, '{}');
   bridge.offer(new Uint8Array(12)); await clock.tick(0);
   assert.equal(calls.filter(call => call.url.endsWith('/frame')).length, 0);
   bridge.destroy();
@@ -79,14 +100,17 @@ test('stream copies the latest frame, caps 8 fps, and allows only one pending fr
   bridge.destroy();
 });
 
-test('lease heartbeat continues without animation frames, including held color tests', async () => {
-  const { bridge, clock, calls } = harness();
+test('persistent lease owns a held scene without animation frames or heartbeat timers', async () => {
+  const { bridge, clock, calls, leases } = harness();
   await bridge.connect('/dev/cu.usbserial-test');
   await bridge.test('blue');
-  bridge.offer(frame(80)); await clock.tick(3100);
+  bridge.offer(frame(80)); await clock.tick(180000);
   assert.equal(bridge.syncing, false);
   assert.equal(calls.filter(call => call.url.endsWith('/frame')).length, 0);
-  assert.equal(calls.filter(call => call.url.endsWith('/heartbeat')).length, 3);
+  assert.equal(calls.filter(call => call.url.endsWith('/heartbeat')).length, 0);
+  assert.equal(calls.filter(call => call.url.endsWith('/lease')).length, 1);
+  assert.equal(leases[0].signal.aborted, false, 'A healthy lease has no whole-stream timeout.');
+  assert.equal(bridge.active, true);
   assert.deepEqual(JSON.parse(calls.find(call => call.url.endsWith('/test')).options.body), {color:'blue'});
   bridge.resume(frame(45)); await clock.tick(0);
   assert.equal(calls.filter(call => call.url.endsWith('/frame')).length, 1);
@@ -119,12 +143,13 @@ test('a failed frame stops streaming without an automatic retry or reconnect', a
 });
 
 test('closing the page sends a best-effort authenticated disconnect and clears timers', async () => {
-  const { bridge, clock, calls } = harness();
+  const { bridge, clock, calls, leases } = harness();
   await bridge.connect('/dev/cu.usbserial-test'); bridge.destroy(); await flush();
   const disconnect = calls.find(call => call.url.endsWith('/disconnect'));
   assert.equal(disconnect.options.keepalive, true);
   assert.equal(disconnect.options.headers['X-Lamp-Token'], 'memory-only-token');
   assert.equal(bridge.token, null); assert.equal(bridge.active, false);
+  assert.equal(leases[0].signal.aborted, true);
   assert.equal(clock.jobs.size, 0);
 });
 
@@ -178,5 +203,78 @@ test('configuration and calibration wait for the current frame ACK and block lat
   assert.equal(calls.filter(call => call.url.endsWith('/test')).length, 1);
   assert.equal(frames.length, 2, 'Calibration remains held after the preceding ACK.');
   assert.equal(bridge.syncing, false); assert.equal(bridge.active, true);
+  bridge.destroy();
+});
+
+test('unexpected lease EOF ends ownership without silently reconnecting the port', async () => {
+  const { bridge, clock, calls, leases } = harness();
+  await bridge.connect('/dev/cu.usbserial-test');
+  leases[0].close(); await flush(); await bridge.leaseTask;
+  assert.equal(bridge.active, false); assert.equal(bridge.token, null);
+  assert.match(bridge.status.error, /page connection ended/);
+  bridge.offer(frame(50)); await clock.tick(60000);
+  assert.equal(calls.filter(call => call.url.endsWith('/connect')).length, 1);
+  assert.equal(calls.filter(call => call.url.endsWith('/lease')).length, 1);
+  assert.equal(calls.filter(call => call.url.endsWith('/frame')).length, 0);
+});
+
+test('lease setup failure disconnects the new serial session and drops its token', async () => {
+  const { bridge, calls, clock } = harness({badLease:true});
+  await assert.rejects(bridge.connect('/dev/cu.usbserial-test'), /Streaming unavailable/);
+  assert.equal(bridge.active, false); assert.equal(bridge.token, null);
+  const disconnect = calls.find(call => call.url.endsWith('/disconnect'));
+  assert.equal(disconnect.options.headers['X-Lamp-Token'], 'memory-only-token');
+  assert.equal(clock.jobs.size, 0);
+});
+
+test('a non-stream response cannot leave an orphaned connected lamp', async () => {
+  const { bridge, calls } = harness();
+  const original = bridge.fetcher;
+  bridge.fetcher = (url, options) => url.endsWith('/lease')
+    ? Promise.resolve({ok:true,headers:new Headers({'Content-Type':'application/json'}),body:null})
+    : original(url, options);
+  await assert.rejects(bridge.connect('/dev/cu.usbserial-test'), /persistent local connection is unavailable/);
+  assert.equal(bridge.token, null);
+  assert.equal(calls.filter(call => call.url.endsWith('/disconnect')).length, 1);
+});
+
+test('lease response headers have a bounded handshake, without a later stream timeout', async () => {
+  const { bridge, calls, clock } = harness();
+  const original = bridge.fetcher;
+  let leaseSignal;
+  bridge.fetcher = (url, options) => {
+    if (!url.endsWith('/lease')) return original(url, options);
+    leaseSignal = options.signal;
+    return new Promise((resolve, reject) => options.signal.addEventListener('abort', () => reject(new DOMException('Handshake timed out', 'AbortError')), {once:true}));
+  };
+  const connecting = assert.rejects(bridge.connect('/dev/cu.usbserial-test'), /Handshake timed out/);
+  await flush(); await clock.tick(4999);
+  assert.equal(leaseSignal.aborted, false); assert.equal(bridge.active, false);
+  await clock.tick(1); await connecting;
+  assert.equal(leaseSignal.aborted, true); assert.equal(bridge.token, null);
+  assert.equal(calls.filter(call => call.url.endsWith('/disconnect')).length, 1);
+});
+
+test('a cancelled old stream cannot terminate a newer explicit connection', async () => {
+  const { bridge, calls } = harness();
+  const original = bridge.fetcher;
+  let oldReadDone, oldSignal, first = true, cancelled = false;
+  bridge.fetcher = (url, options) => {
+    if (url.endsWith('/lease') && first) {
+      first = false; oldSignal = options.signal;
+      const reader = {
+        read:() => new Promise(resolve => { oldReadDone = resolve; }),
+        cancel:async () => { cancelled = true; }, releaseLock:() => {}
+      };
+      return Promise.resolve({ok:true,headers:new Headers({'Content-Type':'text/event-stream'}),body:{getReader:() => reader}});
+    }
+    return original(url, options);
+  };
+  await bridge.connect('/dev/cu.usbserial-test');
+  await bridge.disconnect(); await bridge.connect('/dev/cu.usbserial-test');
+  assert.equal(oldSignal.aborted, true); assert.equal(cancelled, true);
+  oldReadDone({done:true}); await flush();
+  assert.equal(bridge.active, true); assert.equal(bridge.status.error, null);
+  assert.equal(calls.filter(call => call.url.endsWith('/connect')).length, 2);
   bridge.destroy();
 });

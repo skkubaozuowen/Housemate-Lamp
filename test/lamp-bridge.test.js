@@ -227,8 +227,8 @@ test('physical control accepts only loopback connections with a local host name'
   for (const [remote, host] of [['192.168.1.3','localhost:3000'], ['127.0.0.1','attacker.example:3000'], ['127.0.0.1','user@localhost:3000'], ['::1','[broken']]) assert.equal(isLocalLampRequest(request(remote, host)), false);
 });
 
-async function httpFixture(t, {enabled = true} = {}) {
-  const {service, transport} = fixture(t, {enabled});
+async function httpFixture(t, {enabled = true, ...options} = {}) {
+  const {service, transport} = fixture(t, {enabled, ...options});
   const server = createServer({keyProvider:async () => '', lampBridge:service});
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   t.after(() => new Promise(resolve => {server.closeAllConnections(); server.close(resolve);}));
@@ -274,4 +274,112 @@ test('disabled hardware exposes availability without scanning or opening any USB
   assert.equal(status.enabled, false); assert.deepEqual(status.ports, []);
   assert.equal((await post('connect', {port:PORT})).status, 403);
   assert.deepEqual(await (await fetch(`${origin}/api/config`)).json(), {aiAvailable:false});
+});
+
+test('a persistent lease belongs only to the authenticated session and replacement ignores stale cleanup', async t => {
+  let now = 0, firstClosed = 0, secondClosed = 0;
+  const {service, transport, token} = await connected(t, {now:() => now});
+  assert.throws(() => service.attachLease('wrong', () => {}), error => error.status === 401);
+  const detachFirst = service.attachLease(token, () => {firstClosed++;});
+  const detachSecond = service.attachLease(token, () => {secondClosed++;});
+  assert.equal(firstClosed, 1, 'Replacing a lease releases the old HTTP stream.');
+  detachFirst(); // An old response can report close after its replacement has already attached.
+  now = 20000; await service.tick();
+  assert.equal(service.connected, true);
+  assert.equal(transport.writes.at(-1).command, 'P', 'The server, rather than browser timers, feeds the Arduino watchdog.');
+  detachSecond();
+  now += 4500; await service.tick(); assert.equal(service.connected, true);
+  now++; await service.tick();
+  assert.equal(service.connected, false); assert.equal(transport.writes.at(-1).command, 'O');
+  assert.equal(secondClosed, 0, 'The caller already detached the closed stream.');
+});
+
+test('explicit disconnect and serial failure close a live lease and revoke its token', async t => {
+  for (const kind of ['disconnect', 'failure']) {
+    const {service, transport, token} = await connected(t);
+    let closed = 0;
+    service.attachLease(token, () => {closed++;});
+    if (kind === 'disconnect') await service.disconnect(token);
+    else transport.emit('failure', new Error('USB removed'));
+    assert.equal(closed, 1); assert.equal(service.connected, false); assert.equal(service.token, null);
+    assert.throws(() => service.attachLease(token, () => {}), error => error.status === 401);
+  }
+});
+
+async function openHttpLease(origin, token, extraHeaders = {}) {
+  return new Promise((resolve, reject) => {
+    const request = http.request(`${origin}/api/lamp/lease`, {
+      method:'POST', headers:{Origin:origin, 'Content-Type':'application/json', 'X-Lamp-Token':token, ...extraHeaders}
+    }, response => {
+      const chunks = [];
+      response.on('data', chunk => chunks.push(chunk.toString('utf8')));
+      response.on('error', () => {}); // Destroying a test client intentionally aborts the stream.
+      resolve({request, response, chunks});
+    });
+    request.on('error', reject);
+    request.end('{}');
+  });
+}
+
+test('a live authenticated HTTP lease survives throttled browser timers and starts a grace period when closed', async t => {
+  let now = 0;
+  const {service, transport, origin, post} = await httpFixture(t, {now:() => now});
+  const {token} = await (await post('connect', {port:PORT})).json();
+  clearInterval(service.timer); service.timer = null;
+  const lease = await openHttpLease(origin, token);
+  t.after(() => lease.response.destroy());
+  assert.equal(lease.response.statusCode, 200);
+  assert.match(lease.response.headers['content-type'], /^text\/event-stream/);
+  await flush(); assert.ok(lease.chunks.join('').startsWith(':'), 'The server flushes an initial stream comment.');
+  now = 60000; await service.tick();
+  assert.equal(service.connected, true); assert.equal(transport.writes.at(-1).command, 'P');
+  lease.response.destroy();
+  // Wait for TCP close to reach the server and invoke the lease detach callback.
+  for (let i = 0; i < 12; i++) await flush();
+  now += 4500; await service.tick(); assert.equal(service.connected, true);
+  now++; await service.tick();
+  assert.equal(service.connected, false); assert.equal(transport.writes.at(-1).command, 'O');
+});
+
+test('replacing an HTTP lease ends the old response without dropping its replacement', async t => {
+  let now = 0;
+  const {service, origin, post} = await httpFixture(t, {now:() => now});
+  const {token} = await (await post('connect', {port:PORT})).json();
+  clearInterval(service.timer); service.timer = null;
+  const first = await openHttpLease(origin, token);
+  const oldEnded = once(first.response, 'end');
+  const second = await openHttpLease(origin, token);
+  t.after(() => {first.response.destroy(); second.response.destroy();});
+  await oldEnded; await flush();
+  assert.equal(service.status().leaseConnected, true);
+  now = 60000; await service.tick();
+  assert.equal(service.connected, true); assert.equal(second.response.complete, false);
+});
+
+test('disconnect and USB failure each end the actual HTTP lease stream', async t => {
+  for (const kind of ['disconnect', 'failure']) {
+    const {service, transport, origin, post} = await httpFixture(t);
+    const {token} = await (await post('connect', {port:PORT})).json();
+    const lease = await openHttpLease(origin, token);
+    t.after(() => lease.response.destroy());
+    const ended = once(lease.response, 'end');
+    if (kind === 'disconnect') assert.equal((await post('disconnect', {}, {'X-Lamp-Token':token})).status, 200);
+    else transport.emit('failure', new Error('USB removed'));
+    await ended;
+    assert.equal(service.status().leaseConnected, false);
+    assert.equal(service.connected, false); assert.equal(service.token, null);
+    assert.equal((await post('lease', {}, {'X-Lamp-Token':token})).status, 401);
+  }
+});
+
+test('HTTP lease requires authenticated same-origin POST and cannot be claimed with GET or a hostile origin', async t => {
+  const {origin, post} = await httpFixture(t);
+  const {token} = await (await post('connect', {port:PORT})).json();
+  const headers = {'X-Lamp-Token':token};
+  assert.equal((await fetch(`${origin}/api/lamp/lease`, {headers})).status, 404);
+  assert.equal((await post('lease', {}, {...headers, Origin:'https://attacker.example'})).status, 403);
+  assert.equal((await post('lease', {}, {...headers, Origin:''})).status, 403);
+  assert.equal((await post('lease', {}, {...headers, 'Sec-Fetch-Site':'cross-site'})).status, 403);
+  assert.equal((await post('lease', {}, {'X-Lamp-Token':'wrong'})).status, 401);
+  assert.equal((await post('lease', {}, {...headers, 'Content-Type':'text/plain'})).status, 415);
 });
