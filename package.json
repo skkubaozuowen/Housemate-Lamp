@@ -1,10 +1,11 @@
 {
   "name": "housemate-lamp",
-  "version": "2.1.1",
+  "version": "2.2.0",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node server.js",
+    "start:lamp": "HOUSEMATE_HARDWARE=1 node server.js",
     "test": "node --test test/*.test.js"
   },
   "engines": {

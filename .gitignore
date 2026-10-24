@@ -1,6 +1,7 @@
 API Key.txt
 .env
 node_modules/
+.local-hardware/
 *.log
 
 # Local credentials and OS files

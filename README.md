@@ -18,6 +18,20 @@ npm test
 
 Checks use Node's built-in test runner. They cover semantic priority, schema validation, request cancellation and stale results, session reset, local fallback, RGB frames, paused/hidden time and the one-render-loop contract. Browser QA and its limits are recorded in [VALIDATION.md](VALIDATION.md).
 
+## Arduino lamp · local USB
+
+For the USB-connected lamp on this Mac, start the local service with:
+
+```sh
+npm run start:lamp
+```
+
+Requires Python 3 (the Mac's `/usr/bin/python3` is used by default; `HOUSEMATE_PYTHON` can select another interpreter). Open **Light study → 06 Arduino lamp → Connect lamp**. The lamp follows the exact same 256-pixel RGB buffer as the webpage, at up to eight acknowledged frames per second. The 20 light responses and their palettes are unchanged. One-pixel RGB tests hold until **Sync with page**. Rotation, zigzag rows, mirror and low brightness can be adjusted in the drawer. Close other serial monitors before connecting.
+
+The installed firmware targets Nano / ATmega328P with **Old Bootloader**, D6, 256 WS2812B pixels and a separate regulated 5 V supply with shared ground. Brightness is capped at **3 / 255** while the supply rating remains unverified. Physical gradients are coarse at this limit; matching screen appearance requires later calibration. Firmware, protocol, power guidance and upload commands are in [hardware/README.md](hardware/README.md). Original board flash is backed up locally under the ignored `.local-hardware/backups/` directory.
+
+Hardware control is opt-in through `HOUSEMATE_HARDWARE=1` and accepts only loopback requests from the same local origin. One page owns an in-memory token; no automatic port reconnection occurs. Browser leases and a firmware watchdog turn off the lamp after connection loss. `npm start` and Railway keep USB control disabled. A Railway service cannot access this computer's USB cable.
+
 ## AI and local demo
 
 Use the existing ignored `API Key.txt`, or set `OPENAI_API_KEY` on the server. The key is never sent to the browser. `OPENAI_MODEL` defaults to the existing `gpt-6-sol`; `PORT` and `HOST` configure listening. Railway's `PORT` binds to `0.0.0.0` automatically.
@@ -75,7 +89,7 @@ Color corrections run locally in both AI and demo mode. “不要这个颜色”
 
 Manual study previews also replace conflicting old color preferences so the selected palette is actually shown. Keeping a palette and restoring a saved scene retain the intended session preferences. If every chromatic hue is declined, a real gray palette keeps exported plans reproducible; a further rejection with no permitted alternative asks for clarification.
 
-Motion feedback affects later plans. A short thanks preserves color. New moment cancels requests and invalidates late responses, clears text, preferences, scene memories and workshop notes. No database, account, analytics SDK, microphone or hardware permission is required. Refreshing closes the session; nothing is written to localStorage.
+Motion feedback affects later plans. A short thanks preserves color. New moment cancels requests and invalidates late responses, clears text, preferences, scene memories and workshop notes. No database, account, analytics SDK or microphone is required. USB access uses the explicitly enabled local Node service. Refreshing closes the session; nothing is written to localStorage.
 
 ## Code boundaries
 
@@ -90,10 +104,14 @@ Motion feedback affects later plans. A short thanks preserves color. New moment 
 | `public/lib/research.js` | Preview controls, session studies and manual JSON export |
 | `public/app.js` | Minimal everyday interaction and responsive viewport |
 | `server.js` | Static asset allowlist and plan/config API |
+| `public/lib/hardware.js` | Explicit local USB session, latest-frame streaming and lamp controls |
+| `lamp-bridge.js` | Loopback-only lamp API, mapping, CRC packets, ACK flow control and browser lease |
+| `hardware/serial_transport.py` | Exclusive POSIX serial I/O using Python standard library |
+| `hardware/HousemateLamp/HousemateLamp.ino` | D6 WS2812B driver, bounded parser and disconnect watchdog |
 
 Renderer uses elapsed time rather than frame counts, excludes paused/hidden time, captures the displayed frame for continuous transitions, and owns one cancellable render loop. Reduced-motion uses stable simplified compositions. A plan arriving while paused is queued without changing the displayed light. Resuming shows the latest valid plan. Hidden tabs stop rendering.
 
-The current RGB buffer is the future hardware boundary: row-major `(y * 16 + x) * 3 + channel`, channel order R/G/B, integers 0–255. A hardware adapter can consume it without changing semantic routing. No Arduino, serial or Bluetooth output is implemented.
+The shared RGB hardware boundary is row-major `(y * 16 + x) * 3 + channel`, channel order R/G/B, integers 0–255. The USB adapter maps this buffer into the physical chain order without changing semantic routing. Bluetooth output is not implemented.
 
 ## Deployment
 

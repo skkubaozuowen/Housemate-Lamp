@@ -3,10 +3,13 @@ import { SessionController } from './lib/controller.js';
 import { setupResearch } from './lib/research.js';
 import { createPlan } from './lib/catalog.js';
 import { planLocal } from './lib/planner.js';
+import { setupHardware } from './lib/hardware.js';
 const $ = id => document.getElementById(id);
 const input = $('question');
 const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
-const renderer = new LightRenderer($('light'), { gridCanvas: $('grid') });
+let hardware = null;
+const renderer = new LightRenderer($('light'), { gridCanvas: $('grid'), onFrame:frame => hardware?.offer(frame) });
+hardware = setupHardware(renderer);
 renderer.setReducedMotion(motionQuery.matches);
 motionQuery.addEventListener('change', e => renderer.setReducedMotion(e.matches));
 let refreshResearch = () => {}, aiAvailable = false;
@@ -68,7 +71,7 @@ function syncViewport() {
 }
 window.visualViewport?.addEventListener('resize',syncViewport); window.addEventListener('resize',syncViewport);
 input.addEventListener('focus',syncViewport); input.addEventListener('blur',syncViewport); syncViewport();
-window.addEventListener('pagehide', () => { controller.cancel(); renderer.destroy(); },{once:true});
+window.addEventListener('pagehide', () => { hardware?.destroy(); controller.cancel(); renderer.destroy(); },{once:true});
 
 // Configuration never blocks the input or takes over an interaction already begun.
 const initialSequence = controller.sequence;

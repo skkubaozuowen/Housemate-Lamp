@@ -4,12 +4,13 @@ import { pathToFileURL } from 'node:url';
 import { isSameOrigin, listenHost } from './deployment.js';
 import { planLocal, normalizePreferences, normalizePlan } from './public/lib/planner.js';
 import { requestPlan } from './response-api.js';
+import { LampService, handleLampRequest } from './lamp-bridge.js';
 
 const root = new URL('./', import.meta.url);
 const staticFiles = {
   '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'],
   '/style.css': ['style.css', 'text/css'], '/app.js': ['app.js', 'text/javascript'],
-  ...Object.fromEntries(['catalog', 'palettes', 'planner', 'renderer', 'controller', 'research'].map(name => [`/lib/${name}.js`, [`lib/${name}.js`, 'text/javascript']]))
+  ...Object.fromEntries(['catalog', 'palettes', 'planner', 'renderer', 'controller', 'research', 'hardware'].map(name => [`/lib/${name}.js`, [`lib/${name}.js`, 'text/javascript']]))
 };
 function json(res, status, body) {
   if (res.destroyed || res.writableEnded) return;
@@ -43,13 +44,17 @@ async function readBody(req) {
   try { return { value: JSON.parse(Buffer.concat(chunks).toString('utf8')) }; } catch { return { status: 400 }; }
 }
 
-export function createServer({ keyProvider = getKey, fetchImpl = globalThis.fetch, timeoutMs = 24000, model = process.env.OPENAI_MODEL || 'gpt-6-sol' } = {}) {
+export function createServer({ keyProvider = getKey, fetchImpl = globalThis.fetch, timeoutMs = 24000, model = process.env.OPENAI_MODEL || 'gpt-6-sol', lampBridge = new LampService() } = {}) {
   const deadline = Math.max(1, Math.min(25000, Number(timeoutMs) || 24000));
-  return http.createServer(async (req, res) => {
+  const server = http.createServer(async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Cache-Control', 'no-store');
     let pathname;
     try { pathname = new URL(req.url, 'http://localhost').pathname; } catch { return json(res, 400, { error: 'Invalid request.' }); }
+    if (pathname === '/api/lamp' || pathname.startsWith('/api/lamp/')) {
+      try { return await handleLampRequest(req, res, pathname, lampBridge, json); }
+      catch { return json(res, 503, { error:'The USB connection is unavailable.' }); }
+    }
     if (req.method === 'GET' && Object.hasOwn(staticFiles, pathname)) {
       const [file, type] = staticFiles[pathname];
       try { const data = await readFile(new URL(`public/${file}`, root)); res.writeHead(200, { 'Content-Type': `${type}; charset=utf-8` }); res.end(data); }
@@ -98,10 +103,17 @@ export function createServer({ keyProvider = getKey, fetchImpl = globalThis.fetc
       else json(res, 503, { error: 'The light service is unavailable. Try again.' });
     } finally { clearTimeout(timer); }
   });
+  server.once('close', () => { void lampBridge.shutdown(); });
+  server.lampBridge = lampBridge;
+  return server;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const port = Number(process.env.PORT || 3000);
   const host = listenHost(process.env);
-  createServer().listen(port, host, () => console.log(`Housemate listening on ${host}:${port}`));
+  const server = createServer();
+  server.listen(port, host, () => console.log(`Housemate listening on ${host}:${port}`));
+  for (const signal of ['SIGINT','SIGTERM']) process.once(signal, async () => {
+    await server.lampBridge.shutdown(); server.closeAllConnections(); server.close(() => process.exit(0));
+  });
 }

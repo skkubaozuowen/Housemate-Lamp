@@ -77,7 +77,7 @@
       <h3>03 <span>From field to matrix</span></h3>
       <div class="control-grid"><label>Main view<select id="view"><option value="diffusion">Diffusion</option><option value="grid">16 × 16 matrix</option></select></label><label>Understanding<select id="understanding"><option value="ai">AI + local boundaries</option><option value="demo">Local demo</option></select></label></div>
       <canvas id="grid" width="320" height="320" aria-label="16 by 16 RGB light frame"></canvas>
-      <p class="panel-note">Both views share the same 256 RGB pixels. No hardware is connected.</p>
+      <p class="panel-note">Both views share the same 256 RGB pixels. Connect a local Arduino below to send this frame to the lamp.</p>
       <button id="simulate-error" type="button">Preview request failure & retry</button>
     </section>
     <section class="panel-section">
@@ -92,7 +92,22 @@
       <label class="note-label" for="workshop-note">What would you change?</label><textarea id="workshop-note" maxlength="1000" placeholder="Color, timing, movement…" rows="3"></textarea>
       <div class="button-row"><button type="button" data-rating="like">Like</button><button type="button" data-rating="dislike">Dislike</button><button type="button" data-rating="change">Save suggestion</button><button type="button" id="export-feedback">Export notes</button></div>
       <p id="feedback-count" class="panel-note">No notes yet.</p>
-      <details><summary>Design notes & next steps</summary><p class="panel-note">Reception, acknowledgement, repair, and closure are inspired by communication grounding. Responsive care is an exploratory analogy from interpersonal research. Color associations vary across people and cultures. No color, motion, or timing here has been validated as universal.</p><p class="panel-note">Reserved extensions: negotiation, shared attention, recalled scenes, and shared waiting. No voice, hardware connection, accounts, or remote analytics in this prototype.</p></details>
+      <details><summary>Design notes & next steps</summary><p class="panel-note">Reception, acknowledgement, repair, and closure are inspired by communication grounding. Responsive care is an exploratory analogy from interpersonal research. Color associations vary across people and cultures. No color, motion, or timing here has been validated as universal.</p><p class="panel-note">Reserved extensions: negotiation, shared attention, recalled scenes, and shared waiting. No voice, accounts, or remote analytics in this prototype. USB lamp control runs on the local computer.</p></details>
+    </section>
+    <section id="lamp-hardware" class="panel-section">
+      <h3>06 <span>Arduino lamp</span> <small>Local USB</small></h3>
+      <p class="panel-note">WS2812B · 16 × 16 · DIN on D6. Keep the lamp’s separate 5 V supply connected and share GND with the board.</p>
+      <div class="control-grid lamp-connection"><label for="lamp-port">USB board<select id="lamp-port"><option value="">Looking for a USB board…</option></select></label><div class="button-row"><button id="lamp-refresh" type="button">Refresh</button><button id="lamp-connect" type="button" disabled>Connect lamp</button><button id="lamp-disconnect" type="button" disabled>Disconnect</button></div></div>
+      <p id="lamp-status" class="lamp-status" role="status" aria-live="polite">Checking local USB control…</p>
+      <p id="lamp-detail" class="panel-note"></p>
+      <div class="control-grid">
+        <label for="lamp-brightness">Test brightness <output id="lamp-brightness-value">3 / 255</output><input id="lamp-brightness" type="range" min="1" max="3" value="3" step="1" data-lamp-control disabled></label>
+        <label for="lamp-rotation">Panel rotation<select id="lamp-rotation" data-lamp-control disabled><option value="0">0°</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option></select></label>
+      </div>
+      <div class="checks lamp-mapping"><label><input id="lamp-serpentine" type="checkbox" checked data-lamp-control disabled> Zigzag rows</label><label><input id="lamp-mirror" type="checkbox" data-lamp-control disabled> Mirror left / right</label></div>
+      <p class="panel-note">Low brightness for the first connection. Color tests light one pixel; the rest stay off.</p>
+      <div class="button-row lamp-tests"><button type="button" data-lamp-test="red" data-lamp-control disabled><span class="test-dot red" aria-hidden="true"></span>Red pixel</button><button type="button" data-lamp-test="green" data-lamp-control disabled><span class="test-dot green" aria-hidden="true"></span>Green pixel</button><button type="button" data-lamp-test="blue" data-lamp-control disabled><span class="test-dot blue" aria-hidden="true"></span>Blue pixel</button><button type="button" data-lamp-test="off" data-lamp-control disabled>Lights off</button><button id="lamp-sync" type="button" disabled>Sync with page</button></div>
+      <p class="panel-note">A color test stays on until you choose Sync with page. Closing this page or losing the USB connection turns the lamp off.</p>
     </section>
     <p id="panel-status" role="status" aria-live="polite"></p>
   </dialog>
