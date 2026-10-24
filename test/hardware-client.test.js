@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { LampBridge } from '../public/lib/hardware.js';
+import { LampBridge, watchHardwarePage } from '../public/lib/hardware.js';
 
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 class Clock {
@@ -276,5 +276,62 @@ test('a cancelled old stream cannot terminate a newer explicit connection', asyn
   oldReadDone({done:true}); await flush();
   assert.equal(bridge.active, true); assert.equal(bridge.status.error, null);
   assert.equal(calls.filter(call => call.url.endsWith('/connect')).length, 2);
+  bridge.destroy();
+});
+
+test('normal connects never request takeover; only an explicit takeover option transfers control', async () => {
+  const { bridge, calls } = harness();
+  await bridge.connect('/dev/cu.usbserial-test');
+  assert.deepEqual(JSON.parse(calls.find(call => call.url.endsWith('/connect')).options.body), {port:'/dev/cu.usbserial-test',takeover:false});
+  await bridge.disconnect();
+  await bridge.connect('/dev/cu.usbserial-test', {takeover:true});
+  const connects = calls.filter(call => call.url.endsWith('/connect'));
+  assert.deepEqual(JSON.parse(connects[1].options.body), {port:'/dev/cu.usbserial-test',takeover:true});
+  assert.equal(bridge.active, true);
+  bridge.destroy();
+});
+
+test('focus and visible-page refreshes observe another owner without claiming its lamp', async () => {
+  const { bridge, calls } = harness();
+  const doc = new EventTarget(), win = new EventTarget(); doc.hidden = true;
+  const stop = watchHardwarePage(bridge, {document:doc,window:win});
+  win.dispatchEvent(new Event('focus')); await flush();
+  assert.equal(calls.length, 0, 'A hidden page does not perform a focus refresh.');
+  doc.hidden = false; doc.dispatchEvent(new Event('visibilitychange')); win.dispatchEvent(new Event('focus'));
+  await flush();
+  assert.equal(calls.length, 1, 'Simultaneous focus and visibility use a single read-only status request.');
+  assert.equal(calls[0].url, '/api/lamp'); assert.equal(calls[0].options.method, 'GET');
+  assert.equal(bridge.status.connected, true); assert.equal(bridge.active, false); assert.equal(bridge.token, null);
+  stop(); win.dispatchEvent(new Event('focus')); await flush(); assert.equal(calls.length, 1);
+});
+
+test('a late read-only status response cannot overwrite a newly connected owner', async () => {
+  const { bridge } = harness();
+  const original = bridge.fetcher;
+  let releaseStatus;
+  bridge.fetcher = (url, options) => url === '/api/lamp'
+    ? new Promise(resolve => { releaseStatus = () => resolve({ok:true,json:async () => ({enabled:true,connected:false,ready:false,ports:[]})}); })
+    : original(url, options);
+  const staleRefresh = bridge.refresh();
+  await bridge.connect('/dev/cu.usbserial-test');
+  releaseStatus(); await staleRefresh;
+  assert.equal(bridge.active, true); assert.equal(bridge.status.connected, true);
+  bridge.destroy();
+});
+
+test('a focus refresh started during connection cannot overwrite the completed handshake', async () => {
+  const { bridge } = harness();
+  const original = bridge.fetcher;
+  let finishConnect, finishStatus;
+  bridge.fetcher = (url, options) => {
+    if (url.endsWith('/connect')) return new Promise(resolve => { finishConnect = async () => resolve(await original(url, options)); });
+    if (url === '/api/lamp') return new Promise(resolve => { finishStatus = () => resolve({ok:true,json:async () => ({connected:false,ready:false,ports:[]})}); });
+    return original(url, options);
+  };
+  const connecting = bridge.connect('/dev/cu.usbserial-test');
+  const staleRefresh = bridge.refresh();
+  await finishConnect(); await connecting;
+  finishStatus(); await staleRefresh;
+  assert.equal(bridge.active, true); assert.equal(bridge.status.connected, true);
   bridge.destroy();
 });

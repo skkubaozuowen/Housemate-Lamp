@@ -34,7 +34,7 @@ class FakeTransport extends EventEmitter {
 
 function fixture(t, options = {}) {
   const transport = options.transport || new FakeTransport();
-  const service = new LampService({ enabled:true, scanPorts:async () => ports, transportFactory:() => transport, commandTimeout:35, ...options });
+  const service = new LampService({ enabled:true, scanPorts:async () => ports, transportFactory:() => transport, commandTimeout:200, ...options });
   t.after(() => service.release());
   return { service, transport };
 }
@@ -382,4 +382,128 @@ test('HTTP lease requires authenticated same-origin POST and cannot be claimed w
   assert.equal((await post('lease', {}, {...headers, 'Sec-Fetch-Site':'cross-site'})).status, 403);
   assert.equal((await post('lease', {}, {'X-Lamp-Token':'wrong'})).status, 401);
   assert.equal((await post('lease', {}, {...headers, 'Content-Type':'text/plain'})).status, 415);
+});
+
+test('ownership changes only through an explicit takeover, which blanks and closes the old session first', async t => {
+  const transports = [];
+  const {service} = fixture(t, {transportFactory:() => {
+    const transport = new FakeTransport(); transports.push(transport); return transport;
+  }});
+  const original = await service.connect(PORT);
+  let leaseClosed = 0;
+  service.attachLease(original.token, () => {leaseClosed++;});
+  await service.sendFrame(original.token, frame(15));
+  const priorWrites = transports[0].writes.length;
+  await assert.rejects(service.connect(PORT), error => error.status === 409);
+  await assert.rejects(service.connect(PORT, {takeover:false}), error => error.status === 409);
+  assert.equal(transports[0].writes.length, priorWrites); assert.equal(leaseClosed, 0);
+  const replacement = await service.connect(PORT, {takeover:true});
+  assert.notEqual(replacement.token, original.token); assert.equal(replacement.connected, true);
+  assert.equal(transports.length, 2); assert.equal(transports[0].closed, true); assert.equal(leaseClosed, 1);
+  assert.equal(transports[0].writes.at(-1).command, 'O');
+  assert.deepEqual(transports[1].writes.map(message => message.command), ['H', 'O']);
+  assert.throws(() => service.heartbeat(original.token), error => error.status === 401);
+  assert.equal(service.heartbeat(replacement.token).connected, true);
+});
+
+test('a takeover to an unavailable port leaves the current lamp, lease and token untouched', async t => {
+  const {service, transport, token} = await connected(t);
+  let leaseClosed = 0;
+  service.attachLease(token, () => {leaseClosed++;});
+  await service.sendFrame(token, frame(36));
+  const writes = transport.writes.length;
+  await assert.rejects(service.connect('/dev/cu.usbserial-missing', {takeover:true}), error => error.status === 400);
+  assert.equal(transport.writes.length, writes); assert.equal(transport.closed, false); assert.equal(leaseClosed, 0);
+  assert.equal(service.heartbeat(token).connected, true); assert.equal(service.status().leaseConnected, true);
+  assert.deepEqual(service.lastFrame, frame(36));
+});
+
+test('takeover waits for the previous serial process to close, including a ping failure during transfer', async t => {
+  for (const failPing of [false, true]) {
+    const transports = [];
+    const {service} = fixture(t, {now:() => 2000, transportFactory:() => {
+      const transport = new FakeTransport(); transports.push(transport); return transport;
+    }});
+    await service.connect(PORT);
+    clearInterval(service.timer); service.timer = null;
+    const oldTransport = transports[0];
+    let finishClosing;
+    const closing = new Promise(resolve => {finishClosing = resolve;});
+    oldTransport.close = () => {oldTransport.closed = true; return closing;};
+    let tick;
+    if (failPing) { oldTransport.hold.add('P'); tick = service.tick(); }
+    const takeover = service.connect(PORT, {takeover:true});
+    await flush();
+    if (failPing) {
+      oldTransport.text(`NAK ${oldTransport.writes.at(-1).sequence} CRC\n`);
+      await tick; await flush();
+    }
+    const opensBeforeClose = transports.length;
+    finishClosing();
+    const replacement = await takeover;
+    assert.equal(opensBeforeClose, 1, 'A closing serial process can still hold the device exclusively.');
+    assert.equal(replacement.connected, true); assert.equal(transports.length, 2);
+  }
+});
+
+test('the claim gate rejects concurrent claims and old-owner commands while validating a takeover', async t => {
+  let scans = 0, resolveScan;
+  const transports = [];
+  const {service} = fixture(t, {
+    scanPorts:() => ++scans === 1 ? Promise.resolve(ports) : new Promise(resolve => {resolveScan = resolve;}),
+    transportFactory:() => {const transport = new FakeTransport(); transports.push(transport); return transport;}
+  });
+  const original = await service.connect(PORT);
+  const takingOver = service.connect(PORT, {takeover:true});
+  await flush();
+  await assert.rejects(service.connect(PORT, {takeover:true}), error => error.status === 409);
+  assert.throws(() => service.heartbeat(original.token), error => error.status === 409 || error.status === 401);
+  assert.equal(transports.length, 1, 'The replacement cannot open until its selected port is validated.');
+  resolveScan(ports);
+  const replacement = await takingOver;
+  assert.equal(service.heartbeat(replacement.token).connected, true); assert.equal(transports.length, 2);
+});
+
+test('an old frame waiting for a ping cannot overwrite or revoke the session that takes over', async t => {
+  const transports = [];
+  const {service} = fixture(t, {transportFactory:() => {
+    const transport = new FakeTransport(); transports.push(transport); return transport;
+  }});
+  const original = await service.connect(PORT);
+  const oldTransport = transports[0]; oldTransport.hold.add('P');
+  const ping = service.command('P');
+  const waitingFrame = service.sendFrame(original.token, frame(99));
+  const rejected = assert.rejects(waitingFrame, error => error.status === 401 || error.status === 409);
+  const takingOver = service.connect(PORT, {takeover:true});
+  await flush();
+  assert.equal(oldTransport.writes.at(-1).command, 'P');
+  oldTransport.ack(); await ping;
+  const replacement = await takingOver; await rejected;
+  assert.equal(oldTransport.writes.some(message => message.command === 'F'), false);
+  assert.equal(service.lastFrame, null); assert.equal(service.frameCount, 0);
+  assert.equal(service.heartbeat(replacement.token).connected, true);
+  await service.sendFrame(replacement.token, frame(41));
+  assert.deepEqual(service.lastFrame, frame(41)); assert.equal(service.frameCount, 1);
+});
+
+test('HTTP takeover requires an explicit boolean and all existing local origin checks', async t => {
+  const transports = [];
+  const {origin, post, service} = await httpFixture(t, {transportFactory:() => {
+    const transport = new FakeTransport(); transports.push(transport); return transport;
+  }});
+  for (const takeover of ['true', 1, 0, null, {}, []]) assert.equal((await post('connect', {port:PORT, takeover})).status, 400);
+  assert.equal(transports.length, 0);
+  const original = await (await post('connect', {port:PORT})).json();
+  assert.equal((await post('connect', {port:PORT, takeover:false})).status, 409);
+  assert.equal((await post('connect', {port:PORT, takeover:true}, {Origin:'https://attacker.example'})).status, 403);
+  assert.equal((await post('connect', {port:PORT, takeover:true}, {Origin:''})).status, 403);
+  assert.equal((await post('connect', {port:PORT, takeover:true}, {'Sec-Fetch-Site':'cross-site'})).status, 403);
+  assert.equal(service.heartbeat(original.token).connected, true); assert.equal(transports.length, 1);
+  const response = await post('connect', {port:PORT, takeover:true});
+  assert.equal(response.status, 200);
+  const replacement = await response.json();
+  assert.notEqual(replacement.token, original.token); assert.equal(transports.length, 2);
+  assert.equal((await post('heartbeat', {}, {'X-Lamp-Token':original.token})).status, 401);
+  assert.equal((await post('heartbeat', {}, {'X-Lamp-Token':replacement.token})).status, 200);
+  assert.equal((await fetch(`${origin}/api/lamp`)).status, 200);
 });

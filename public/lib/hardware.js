@@ -9,7 +9,7 @@ export class LampBridge {
     this.token = null; this.syncing = true; this.pending = null;
     this.frameTimer = null; this.inFlight = false; this.frameDone = null; this.commandBusy = false; this.leaseBusy = false;
     this.leaseController = null; this.leaseReader = null; this.leaseHandshakeTimer = null; this.leaseConnected = false;
-    this.lastFrameAt = -Infinity; this.generation = 0; this.destroyed = false;
+    this.lastFrameAt = -Infinity; this.generation = 0; this.statusRevision = 0; this.destroyed = false;
   }
   get active() { return Boolean(this.token && this.status.connected && this.status.ready && this.leaseConnected && !this.destroyed); }
   emit() { this.onChange({ ...this.status, active:this.active, connecting:Boolean(this.token && this.status.connected && !this.leaseConnected), syncing:this.syncing }); }
@@ -31,18 +31,25 @@ export class LampBridge {
   }
   apply(result) {
     const { token:ignored, ...status } = result;
-    this.status = { ...this.status, ...status }; this.emit();
+    this.status = { ...this.status, ...status }; this.statusRevision++; this.emit();
   }
   async refresh() {
-    try { this.apply(await this.request('')); }
-    catch (error) { this.status.error = error.message; this.emit(); }
-    return this.status;
+    if (this.refreshTask) return this.refreshTask;
+    const generation = this.generation, revision = this.statusRevision;
+    const task = (async () => {
+      try { const result = await this.request(''); if (generation === this.generation && revision === this.statusRevision) this.apply(result); }
+      catch (error) { if (generation === this.generation && revision === this.statusRevision) { this.status.error = error.message; this.emit(); } }
+      return this.status;
+    })();
+    this.refreshTask = task;
+    try { return await task; }
+    finally { if (this.refreshTask === task) this.refreshTask = null; }
   }
-  async connect(port) {
+  async connect(port, { takeover = false } = {}) {
     if (this.destroyed) return;
     this.endSession();
     const generation = this.generation;
-    const result = await this.request('/connect', { body:{ port }, token:null });
+    const result = await this.request('/connect', { body:{ port, takeover:takeover === true }, token:null });
     if (generation !== this.generation || this.destroyed) return;
     if (!result.token || !result.ready || !result.connected) throw new Error('USB opened, but the lamp has not acknowledged its firmware.');
     this.token = result.token; this.syncing = true; this.apply(result);
@@ -187,7 +194,15 @@ export class LampBridge {
       catch (error) { if (!keepalive && generation === this.generation) { this.status.error = error.message; this.emit(); } }
     }
   }
-  destroy() { void this.disconnect({ keepalive:true }); this.destroyed = true; }
+  destroy() { this.stopWatchingPage?.(); void this.disconnect({ keepalive:true }); this.destroyed = true; }
+}
+
+/** Visibility refreshes status only; moving between pages never claims a lamp. */
+export function watchHardwarePage(bridge, { document:doc = document, window:win = window } = {}) {
+  const refresh = () => { bridge.emit(); if (!doc.hidden && !bridge.destroyed) void bridge.refresh(); };
+  win.addEventListener('focus', refresh);
+  doc.addEventListener('visibilitychange', refresh);
+  return () => { win.removeEventListener('focus', refresh); doc.removeEventListener('visibilitychange', refresh); };
 }
 
 export function setupHardware(renderer, { document:doc = document, bridgeOptions = {} } = {}) {
@@ -205,9 +220,11 @@ export function setupHardware(renderer, { document:doc = document, bridgeOptions
       ports.append(option);
     }
     if (![...ports.options].length) { const option = doc.createElement('option'); option.value = ''; option.textContent = 'No USB board found'; ports.append(option); }
-    if ([...ports.options].some(option => option.value === selected)) ports.value = selected;
+    const preferred = state.connected && state.port ? state.port : selected;
+    if ([...ports.options].some(option => option.value === preferred)) ports.value = preferred;
     ports.disabled = busy || !available || state.connected;
-    byId('lamp-connect').disabled = busy || !available || state.connected || !ports.value;
+    byId('lamp-connect').disabled = busy || !available || active || state.connecting || !ports.value;
+    byId('lamp-connect').textContent = state.connected && !active && !state.connecting ? 'Use lamp here' : 'Connect lamp';
     byId('lamp-disconnect').disabled = busy || !active;
     byId('lamp-refresh').disabled = busy;
     for (const control of section.querySelectorAll('[data-lamp-control]')) control.disabled = busy || !active;
@@ -221,19 +238,47 @@ export function setupHardware(renderer, { document:doc = document, bridgeOptions
       if (doc.activeElement !== byId('lamp-rotation')) byId('lamp-rotation').value = String(state.mapping.rotation);
       if (doc.activeElement !== byId('lamp-mirror')) byId('lamp-mirror').checked = state.mapping.mirrorX;
     }
-    status.textContent = state.error ? state.error : !available ? 'USB control is available on the local computer only.' : state.connecting ? 'Starting the lamp’s page connection…' : active ? state.syncing ? 'Lamp connected · following this page' : 'Lamp connected · calibration held' : state.connected ? 'USB is in use by another page. Disconnect there first.' : 'Connect the USB board to start.';
+    const following = !state.syncing ? 'calibration held' : renderer.paused ? 'paused' : doc.hidden ? 'background holds current light' : 'following this page';
+    const statusText = state.error ? state.error : !available ? 'USB control is available on the local computer only.' : state.connecting ? 'Starting the lamp’s page connection…' : active ? `Lamp connected · ${following}` : state.connected ? 'Another page controls the lamp. Choose Use lamp here to switch to this page.' : 'Connect the USB board to start.';
+    if (status.textContent !== statusText) status.textContent = statusText;
     status.dataset.state = state.error ? 'error' : active ? 'connected' : 'idle';
     details.textContent = active ? `${state.pixels || 256} pixels · D${state.pin || 6} · ${state.frameCount || 0} frames acknowledged${state.lastAckAt ? ' · Lamp responding' : ''}` : available ? 'Start at low brightness. Test one pixel, then sync the light.' : 'Open this project at localhost to connect the Arduino.';
+    const main = byId('lamp-page-controls');
+    if (main) {
+      main.hidden = !available;
+      main.dataset.state = active ? 'connected' : state.connected ? 'other' : 'idle';
+      const mainText = state.connecting ? 'USB lamp · connecting…' : active ? `USB lamp · ${following}` : state.connected ? 'USB lamp · another page is in control' : 'USB lamp · disconnected';
+      if (byId('lamp-page-status').textContent !== mainText) byId('lamp-page-status').textContent = mainText;
+      byId('lamp-page-action').textContent = state.connecting ? 'Connecting…' : active ? 'Light controls' : state.connected ? 'Use lamp here' : 'Connect lamp';
+      byId('lamp-page-action').disabled = busy || state.connecting;
+    }
   } });
   async function action(callback) {
     if (busy) return;
     busy = true; bridge.emit();
     try { await callback(); }
-    catch (error) { bridge.status.error = error.message; }
+    catch (error) { if (error.status === 409) await bridge.refresh(); bridge.status.error = error.message; }
     finally { busy = false; bridge.emit(); }
   }
+  const openControls = () => {
+    if (!byId('research').open) byId('open-research').click();
+    section.scrollIntoView({block:'start'});
+    (bridge.active ? byId('lamp-disconnect') : ports.disabled ? byId('lamp-connect') : ports).focus({preventScroll:true});
+  };
+  const connectHere = async () => {
+    const takeover = Boolean(bridge.status.connected && !bridge.active);
+    await bridge.connect(ports.value, {takeover});
+    bridge.offer(renderer.frame);
+  };
   byId('lamp-refresh').addEventListener('click', () => { void action(() => bridge.refresh()); });
-  byId('lamp-connect').addEventListener('click', () => { void action(async () => { await bridge.connect(ports.value); bridge.offer(renderer.frame); }); });
+  byId('lamp-connect').addEventListener('click', () => { void action(connectHere); });
+  byId('lamp-page-action')?.addEventListener('click', () => {
+    if (bridge.active) { openControls(); return; }
+    const availablePorts = bridge.status.ports || [];
+    if (availablePorts.length !== 1) { openControls(); return; }
+    ports.value = availablePorts[0].path;
+    void action(connectHere);
+  });
   byId('lamp-disconnect').addEventListener('click', () => { void action(() => bridge.disconnect()); });
   const configure = () => action(async () => {
     await bridge.configure({ brightness:Number(byId('lamp-brightness').value), mapping:{ serpentine:byId('lamp-serpentine').checked, rotation:Number(byId('lamp-rotation').value), mirrorX:byId('lamp-mirror').checked } });
@@ -243,6 +288,7 @@ export function setupHardware(renderer, { document:doc = document, bridgeOptions
   for (const id of ['lamp-brightness','lamp-serpentine','lamp-rotation','lamp-mirror']) byId(id).addEventListener('change', () => { void configure(); });
   for (const button of section.querySelectorAll('[data-lamp-test]')) button.addEventListener('click', () => { void action(() => bridge.test(button.dataset.lampTest)); });
   byId('lamp-sync').addEventListener('click', () => bridge.resume(renderer.frame));
+  bridge.stopWatchingPage = watchHardwarePage(bridge, {document:doc,window:doc.defaultView || window});
   void bridge.refresh();
   return bridge;
 }

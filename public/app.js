@@ -28,6 +28,7 @@ function update(state) {
   const descriptions = { received:'Moment received.', processing:'Connecting this moment to light.', responding:'The light is responding.', error:'Connection interrupted. Retry is available; local demo will respond.', waiting:'There is room for another thought.', idle:'Light is ready.', preview:'Previewing a light study.' };
   $('live-status').textContent = descriptions[state.phase] || 'Light is ready.';
   refreshResearch(state);
+  hardware?.emit();
 }
 async function requestPlan(body, signal) {
   const response = await fetch('/api/plan', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body), signal:AbortSignal.any([signal, AbortSignal.timeout(30000)]) });

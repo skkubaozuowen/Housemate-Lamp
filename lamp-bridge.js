@@ -60,6 +60,7 @@ export class PythonSerialTransport extends EventEmitter {
         if (!this.closed) this.emit('failure', error);
       };
       this.child = spawn(this.python, ['-u', fileURLToPath(new URL('./hardware/serial_transport.py', import.meta.url)), this.port], { stdio:['pipe', 'pipe', 'ignore'] });
+      this.closedPromise = new Promise(done => { this.child.once('close', done); this.child.once('error', done); });
       const timer = setTimeout(() => { failure(); this.close(); }, 4000);
       this.child.on('error', failure);
       this.child.on('exit', () => { clearTimeout(timer); if (!this.closed) failure(); });
@@ -84,12 +85,13 @@ export class PythonSerialTransport extends EventEmitter {
     this.child.stdin.write(`${JSON.stringify({ write:bytes.toString('base64') })}\n`);
   }
   close() {
-    if (this.closed) return;
+    if (this.closed) return this.closedPromise;
     this.closed = true;
     if (this.child?.stdin.writable) this.child.stdin.end('{"close":true}\n');
     const child = this.child;
     const timer = setTimeout(() => { if (child && child.exitCode === null) child.kill('SIGTERM'); }, 200);
     timer.unref();
+    return this.closedPromise;
   }
 }
 
@@ -97,12 +99,13 @@ export class LampService {
   constructor({ enabled = process.env.HOUSEMATE_HARDWARE === '1', scanPorts = listUsbPorts, transportFactory = port => new PythonSerialTransport(port), commandTimeout = 1400, leaseMs = 4500, now = Date.now } = {}) {
     this.enabled = enabled; this.scanPorts = scanPorts; this.transportFactory = transportFactory;
     this.commandTimeout = commandTimeout; this.leaseMs = leaseMs; this.now = now;
-    this.ports = []; this.transport = null; this.token = null; this.connecting = false; this.control = false;
+    this.ports = []; this.transport = null; this.token = null; this.connecting = false; this.claimBusy = false; this.control = false;
     this.connected = false; this.ready = false; this.frameBusy = false; this.port = null; this.maxBrightness = 3; this.brightness = 3;
     this.mapping = { ...DEFAULT_MAPPING }; this.frameCount = 0; this.lastAckAt = null; this.error = null;
     this.sequence = 0; this.lines = ''; this.pending = null; this.generation = 0; this.lastLeaseAt = 0;
     this.lastFrame = null; this.testColor = null; this.lastPingAt = 0;
     this.liveLease = null;
+    this.pendingTransportClose = Promise.resolve();
   }
   status() {
     return { enabled:this.enabled, ports:this.ports, connected:this.connected, ready:this.ready, port:this.port,
@@ -112,20 +115,29 @@ export class LampService {
   async getStatus() { if (this.enabled) this.ports = await this.scanPorts(); return this.status(); }
   authorize(token) {
     if (!this.token || typeof token !== 'string' || !/^[a-f0-9]{48}$/.test(token) || !timingSafeEqual(Buffer.from(token), Buffer.from(this.token))) throw new LampError('This lamp session has ended. Connect again.', 401);
+    if (this.claimBusy) throw new LampError('Lamp control is moving to another page. Try again.', 409);
     if (!this.connected || !this.ready) throw new LampError('The lamp is not connected.', 409);
     this.lastLeaseAt = this.now();
   }
-  async connect(port) {
+  checkSession(token, generation) {
+    if (generation !== this.generation) throw new LampError('This lamp session has ended. Connect again.', 401);
+    this.authorize(token);
+  }
+  async connect(port, { takeover = false } = {}) {
     if (!this.enabled) throw new LampError('USB control is enabled only on the local computer.', 403);
-    if (this.transport || this.connecting) throw new LampError('USB is already in use. Disconnect the other page first.', 409);
-    this.ports = await this.scanPorts();
-    if (!this.ports.some(item => item.path === port)) throw new LampError('Select an available USB board.', 400);
-    // The scan is asynchronous: recheck ownership before opening the device.
-    if (this.transport || this.connecting) throw new LampError('USB is already in use.', 409);
-    this.connecting = true; this.error = null; this.port = port; this.lines = ''; this.frameCount = 0;
-    this.lastAckAt = null; this.ready = false; this.lastFrame = null; this.testColor = null;
-    const generation = ++this.generation;
+    if (typeof takeover !== 'boolean') throw new LampError('Invalid lamp control request.', 400);
+    if (this.claimBusy || this.connecting || this.control || (this.transport && !takeover)) throw new LampError('USB is already in use. Choose Use lamp here to switch pages.', 409);
+    this.claimBusy = true;
+    let generation;
     try {
+      // Validate first; an unavailable target must not blank the current lamp.
+      this.ports = await this.scanPorts();
+      if (!this.ports.some(item => item.path === port)) throw new LampError('Select an available USB board.', 400);
+      if (this.transport) await this.disconnectInternal();
+      await this.pendingTransportClose;
+      this.connecting = true; this.error = null; this.port = port; this.lines = ''; this.frameCount = 0;
+      this.lastAckAt = null; this.ready = false; this.lastFrame = null; this.testColor = null;
+      generation = ++this.generation;
       const transport = this.transport = this.transportFactory(port);
       transport.on('data', bytes => { if (generation === this.generation) this.receive(bytes); });
       transport.on('failure', () => { if (generation === this.generation) this.fail('The USB board disconnected. Reconnect it and try again.'); });
@@ -142,9 +154,9 @@ export class LampService {
       this.timer = setInterval(() => { void this.tick(); }, 250); this.timer.unref();
       return { ...this.status(), token:this.token };
     } catch (error) {
-      if (generation === this.generation) this.fail(error instanceof LampError ? error.message : 'Could not connect the USB board.');
-      throw new LampError(this.error || 'Could not connect the USB board.');
-    }
+      if (generation !== undefined && generation === this.generation) this.fail(error instanceof LampError ? error.message : 'Could not connect the USB board.');
+      throw error instanceof LampError ? error : new LampError('Could not connect the USB board.');
+    } finally { this.claimBusy = false; }
   }
   receive(bytes) {
     this.lines += bytes.toString('ascii');
@@ -179,15 +191,16 @@ export class LampService {
     catch { this.pending = null; clearTimeout(timer); reject(new LampError('The USB board disconnected.')); }
     return promise;
   }
-  async exclusive(callback) {
+  async exclusive(callback, token, generation) {
     if (this.control) throw new LampError('The lamp is busy. Try again.', 409);
     this.control = true;
-    try { if (this.pending) await this.pending.promise; return await callback(); }
-    catch (error) { this.fail(error.message); throw error; }
-    finally { this.control = false; }
+    try { if (this.pending) await this.pending.promise; this.checkSession(token, generation); return await callback(); }
+    catch (error) { if (generation === this.generation && ![401,409].includes(error.status)) this.fail(error.message); throw error; }
+    finally { if (generation === this.generation) this.control = false; }
   }
   async sendFrame(token, frame) {
     this.authorize(token);
+    const generation = this.generation;
     if (frame.length !== FRAME_BYTES) throw new LampError('A frame must contain exactly 768 RGB bytes.', 400);
     if (this.control || this.frameBusy) throw new LampError('The lamp is busy. Try again.', 409);
     this.frameBusy = true;
@@ -195,12 +208,14 @@ export class LampService {
     try {
       // One browser request is in flight. An occasional ping may finish first.
       if (this.pending) await this.pending.promise;
+      this.checkSession(token, generation);
       if (this.control) throw new LampError('The lamp is busy. Try again.', 409);
       await this.command('F', this.framePayload(mapFrame(image, this.mapping)));
+      this.checkSession(token, generation);
       this.lastFrame = image; this.testColor = null; this.frameCount++;
     }
-    catch (error) { if (error.status !== 409) this.fail(error.message); throw error; }
-    finally { this.frameBusy = false; }
+    catch (error) { if (generation === this.generation && ![401,409].includes(error.status)) this.fail(error.message); throw error; }
+    finally { if (generation === this.generation) this.frameBusy = false; }
     return this.status();
   }
   framePayload(frame) { return Buffer.concat([Buffer.from([this.brightness]), frame]); }
@@ -220,6 +235,7 @@ export class LampService {
   }
   async configure(token, settings) {
     this.authorize(token);
+    const generation = this.generation;
     const { brightness, mapping } = settings || {};
     if (!Number.isInteger(brightness) || brightness < 1 || brightness > this.maxBrightness || !mapping || typeof mapping.serpentine !== 'boolean' || typeof mapping.mirrorX !== 'boolean' || ![0,90,180,270].includes(mapping.rotation)) throw new LampError('Invalid brightness or pixel mapping.', 400);
     return this.exclusive(async () => {
@@ -228,7 +244,7 @@ export class LampService {
       else if (this.lastFrame) { await this.command('F', this.framePayload(mapFrame(this.lastFrame, this.mapping))); this.frameCount++; }
       else await this.command('P');
       return this.status();
-    });
+    }, token, generation);
   }
   testFrame(color) {
     const frame = Buffer.alloc(FRAME_BYTES);
@@ -237,17 +253,20 @@ export class LampService {
   }
   async test(token, color) {
     this.authorize(token);
+    const generation = this.generation;
     if (!['red','green','blue','off'].includes(color)) throw new LampError('Choose red, green, blue or off.', 400);
-    return this.exclusive(async () => { await this.command('F', this.framePayload(this.testFrame(color))); this.testColor = color; this.frameCount++; return this.status(); });
+    return this.exclusive(async () => { await this.command('F', this.framePayload(this.testFrame(color))); this.testColor = color; this.frameCount++; return this.status(); }, token, generation);
   }
   async tick() {
-    if (!this.connected || this.control) return;
+    if (!this.connected || this.control || this.claimBusy) return;
     // A live HTTP response follows the actual page connection. Unlike a JS
     // timer, it is not paused merely because the page is in the background.
     if (!this.liveLease && this.now() - this.lastLeaseAt > this.leaseMs) { await this.disconnectInternal('The page disconnected. Connect again to resume.'); return; }
     if (!this.pending && this.now() - this.lastPingAt >= 1000) {
       this.lastPingAt = this.now();
-      try { await this.command('P'); } catch { this.fail('The Arduino stopped responding. Reconnect it.'); }
+      const generation = this.generation;
+      try { await this.command('P'); }
+      catch { if (generation === this.generation && !this.claimBusy) this.fail('The Arduino stopped responding. Reconnect it.'); }
     }
   }
   async disconnect(token) { this.authorize(token); await this.disconnectInternal(); return this.status(); }
@@ -256,7 +275,7 @@ export class LampService {
     this.control = true;
     try { if (this.pending) await this.pending.promise; if (this.transport && this.ready) await this.command('O'); }
     catch { /* Firmware also blanks the LEDs if the serial link is lost. */ }
-    finally { this.release(); this.error = message; this.control = false; }
+    finally { await this.release(); this.error = message; this.control = false; }
   }
   fail(message) { this.release(); this.error = message; }
   release() {
@@ -264,8 +283,10 @@ export class LampService {
     const lease = this.liveLease; this.liveLease = null;
     try { lease?.close(); } catch { /* Closing the board also ends ownership. */ }
     if (this.pending) { clearTimeout(this.pending.timer); this.pending.reject(new LampError('The USB session ended.')); this.pending = null; }
-    this.transport?.close(); this.transport = null; this.token = null; this.connected = false; this.ready = false; this.connecting = false;
-    this.port = null; this.testColor = null;
+    const closing = this.transport?.close(); this.transport = null; this.token = null; this.connected = false; this.ready = false; this.connecting = false;
+    this.port = null; this.testColor = null; this.frameBusy = false;
+    if (closing?.then) this.pendingTransportClose = Promise.allSettled([this.pendingTransportClose, closing]).then(() => {});
+    return this.pendingTransportClose;
   }
   async shutdown() { if (this.transport && !this.control) await this.disconnectInternal(); else this.release(); }
 }
@@ -322,7 +343,7 @@ export async function handleLampRequest(req, res, pathname, service, json) {
     if (pathname === '/api/lamp/lease') { openLeaseResponse(req, res, service, token); return; }
     let result;
     switch (pathname) {
-      case '/api/lamp/connect': result = await service.connect(body?.port); break;
+      case '/api/lamp/connect': result = await service.connect(body?.port, {takeover:body?.takeover === undefined ? false : body.takeover}); break;
       case '/api/lamp/frame': result = await service.sendFrame(token, bytes); break;
       case '/api/lamp/heartbeat': result = service.heartbeat(token); break;
       case '/api/lamp/configure': result = await service.configure(token, body); break;
