@@ -75,7 +75,7 @@ Version 2.1 gives each response a more distinct path, composition and rhythm, wi
 | B11 | farewell | Slow retreat into the base; returns to idle |
 | B12 | error | Soft cloud curves outward, hesitates and returns; retry available |
 | R01 | empathize | Pause, then regions approach with a connecting stroke; holds |
-| R02 | accompany | Traveling parallel breathing bands; continues when invited |
+| R02 | accompany | Soft curved waves flow continuously like water; continues when invited |
 | R03 | soothe | Irregular angled flow settles into horizontal bands; holds |
 | R04 | encourage | Three connected rising steps; supports an upcoming action |
 | R05 | celebrate | Three controlled openings; brief, then idle |

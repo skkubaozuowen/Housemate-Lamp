@@ -14,6 +14,7 @@ const gaussian = (x,y,shape) => Math.exp(-(((x-shape.x)/shape.rx)**2+((y-shape.y
 function addField(scene,x,y,rx,ry,color,strength=1) { scene.push({kind:'field',x,y,rx,ry,color,strength}); }
 function addRing(scene,x,y,radius,width,color,strength=1) { scene.push({kind:'ring',x,y,radius,width,color,strength}); }
 function addBand(scene,position,width,angle,color,strength=1) { scene.push({kind:'band',position,width,angle,color,strength}); }
+function addWave(scene,y,width,bend,phase,flow,color,strength=1) { scene.push({kind:'wave',x:0,y,width,bend,phase,flow,color,strength}); }
 function addArc(scene,x,y,radius,width,direction,color,strength=1) { scene.push({kind:'arc',x,y,radius,width,direction,color,strength}); }
 function addStroke(scene,x,y,x2,y2,width,color,strength=1) { scene.push({kind:'stroke',x,y,x2,y2,width,color,strength}); }
 
@@ -33,10 +34,12 @@ function primitiveScene(primitive,{p,clock,phase,amp,energy,type}) {
       restingFields(scene,phase,0,base); break;
     case 'slow_drift':
       if(type==='accompany') {
-        const breath=(Math.sin(clock*.75+phase)+1)/2*(amp/.62);
-        addBand(scene,.17+Math.sin(drift*.9)*amp*.28,.18+breath*.035,-.22,0,base*.88);
-        addBand(scene,.86+Math.sin(drift*.9+2.1)*amp*.25,.22-breath*.025,-.22,1,base*.83);
-        addField(scene,.58,.98,.4,.21,2,base*.32);
+        // A continuous clock carries the curves through every loop boundary.
+        // Amplitude zero freezes their flow, while retaining the water-like form.
+        const flow=clock*2.15*(amp/.62),bend=.085+amp*.025;
+        addWave(scene,.22,.12,bend,phase,flow,0,base);
+        addWave(scene,.53,.145,bend,phase+.7,flow+.24,1,base*.95);
+        addWave(scene,.84,.125,bend*.9,phase+1.4,flow+.48,2,base*.8);
       } else {
         // Availability wanders at the edges; company occupies traveling bands.
         addField(scene,-.035+Math.sin(drift)*amp*.19,.4+Math.cos(drift)*amp*.22,.34,.36,0,base);
@@ -193,7 +196,8 @@ export function renderFrame(plan = {}, elapsedMs = 0, {reducedMotion=false,color
   // Finite motions stay at their endpoint even if the parent retains the plan.
   const localTime=reducedMotion ? duration : loop ? elapsed : Math.min(elapsed,duration);
   const clock=localTime/1000*speed;
-  const staticPrimitive=reducedMotion && ['slow_drift','pass','interrupt_return','local_echo'].includes(primitive) ? 'hold' : primitive;
+  const staticPrimitive=reducedMotion && ['slow_drift','pass','interrupt_return','local_echo'].includes(primitive)
+    && !(type==='accompany'&&primitive==='slow_drift') ? 'hold' : primitive;
   const scene=primitiveScene(staticPrimitive,{p,clock,phase,amp,energy,type});
   // Seed shifts a scene's origin without changing its recognizable gesture.
   // Duration controls the finite gesture; speed controls its bounded local flow.
@@ -224,6 +228,13 @@ export function renderFrame(plan = {}, elapsedMs = 0, {reducedMotion=false,color
         const dx=shape.x2-shape.x,dy=shape.y2-shape.y;
         const along=clamp(((nx-shape.x)*dx+(ny-shape.y)*dy)/(dx*dx+dy*dy||1));
         const distance=Math.hypot(nx-(shape.x+along*dx),ny-(shape.y+along*dy));
+        weight=Math.exp(-((distance/shape.width)**2)*1.6);
+      } else if(shape.kind==='wave') {
+        const along=nx-shape.x,main=along*TAU*.8+shape.phase*.3-shape.flow;
+        const crest=along*TAU*1.5+shape.phase-shape.flow;
+        const center=shape.y+Math.sin(main)*shape.bend+Math.sin(crest)*.032;
+        const slope=Math.cos(main)*TAU*.8*shape.bend+Math.cos(crest)*TAU*1.5*.032;
+        const distance=(ny-center)/Math.sqrt(1+slope*slope);
         weight=Math.exp(-((distance/shape.width)**2)*1.6);
       } else {
         const distance=ny*Math.cos(shape.angle)+nx*Math.sin(shape.angle)-shape.position;

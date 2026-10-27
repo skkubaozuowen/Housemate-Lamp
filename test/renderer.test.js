@@ -88,6 +88,10 @@ test('finite scenes stop and hold; reduced-motion scenes do not keep drifting',(
     const plan=fixed(type);
     assert.deepEqual(renderFrame(plan,0,{reducedMotion:true}),renderFrame(plan,60000,{reducedMotion:true}),type);
   }
+  const waves=fixed('accompany');
+  assert.ok(difference(renderFrame(waves,0,{reducedMotion:true}),renderFrame({...waves,motionPrimitive:'hold'},0,{reducedMotion:true}))>1,'reduced motion retains a static curved-wave composition');
+  const seam=waves.durationMs;
+  assert.ok(difference(renderFrame(waves,seam-1000/120),renderFrame(waves,seam+1000/120))<.3,'continuous wave flow crosses the catalog loop boundary without a reset');
   const hold=createPlan('accompany',{seed:100,motionPrimitive:'hold'});
   assert.deepEqual(renderFrame(hold,100),renderFrame(hold,7000));
 });
@@ -99,7 +103,7 @@ test('finite gesture speed changes its bounded flow and seed varies the spatial 
   assert.deepEqual(renderFrame({...plan,speed:.1},plan.durationMs),renderFrame({...plan,speed:1.8},plan.durationMs),'speed does not change the finite endpoint');
 });
 
-test('zero amplitude removes processing orbits, company breathing, and the thanks orbital path',()=>{
+test('zero amplitude removes processing orbits, company wave flow, and the thanks orbital path',()=>{
   const colors=[[158,130,240],[243,139,183],[255,192,131]];
   for(const type of ['processing','accompany']) {
     const still={...fixed(type),amplitude:0};
@@ -107,6 +111,8 @@ test('zero amplitude removes processing orbits, company breathing, and the thank
     const active=fixed(type);
     assert.ok(difference(renderFrame(active,150,{colors}),renderFrame(active,2400,{colors}))>.1,`${type} retains visible default movement`);
   }
+  const company=fixed('accompany');
+  assert.ok(difference(renderFrame({...company,speed:.1},1800,{colors}),renderFrame({...company,speed:.8},1800,{colors}))>1,'wave flow follows the speed control');
   const thanks=fixed('receive_thanks'),still={...thanks,amplitude:0};
   // These moments have equal finite fade envelopes. Any difference between
   // them therefore reveals an orbital path that should have been disabled.

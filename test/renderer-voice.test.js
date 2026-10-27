@@ -57,10 +57,12 @@ test('reduced motion fixes voice geometry in time while measured levels still ch
   assert.equal(darkest(quiet),darkest(loud),'level changes never displace the center');
 });
 
-test('all 20 original scene frames remain byte-for-byte unchanged',()=>{
+test('the other 19 scene frames remain byte-for-byte unchanged by the R02 water-flow revision',()=>{
   const hash=createHash('sha256');
-  for(const type of RESPONSE_TYPES){const plan=createPlan(type,{seed:4589});for(const p of[0,.17,.42,.8,1,3])hash.update(renderFrame(plan,plan.durationMs*p));}
-  assert.equal(hash.digest('hex'),'5152a1d68c9254d5e89c337c700c43da001256a9450752a425d8c3cd8cd6c93e');
+  // Captured from HEAD before revising R02. Its intentionally changed geometry
+  // is excluded; the other responses retain their existing exact RGB frames.
+  for(const type of RESPONSE_TYPES.filter(type=>type!=='accompany')){const plan=createPlan(type,{seed:4589});for(const p of[0,.17,.42,.8,1,3])hash.update(renderFrame(plan,plan.durationMs*p));}
+  assert.equal(hash.digest('hex'),'3364b056fbef1a80e4a614c74a13039f6b530926305b89717fa48490b58abc5b');
 });
 
 test('voice shares one renderer RAF, source pixels, grid and emitted RGB while freezing the base timeline',()=>{
