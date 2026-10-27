@@ -244,12 +244,19 @@ export function renderFrame(plan = {}, elapsedMs = 0, {reducedMotion=false,color
 /** The voice field is real matrix data, using the same white-ground diffusion. */
 export function renderVoiceFrame(level=0,elapsedMs=0,{reducedMotion=false}={}) {
   const energy=clamp(number(level,0)),time=Math.max(0,number(elapsedMs,0))/1000;
-  const breath=reducedMotion ? 0 : Math.sin(time*1.5)*energy*.012;
-  const radius=(reducedMotion ? .34 : .29+energy*.14)+breath;
+  // This slow drift is an ambient gesture, separate from microphone amplitude.
+  // Offset ellipses exchange blue, turquoise, and mint rather than outlining an orb.
+  const phase=reducedMotion ? 0 : time*TAU/10;
+  const radius=reducedMotion ? .22 : .22+energy*.08;
+  const gain=1.1+energy*.7;
   const scene=[
-    {x:.5,y:.4,rx:radius,ry:radius*1.06,color:[105,167,250],strength:.95+energy*.85},
-    {x:.45,y:.43,rx:radius*1.65,ry:radius*1.5,color:[151,222,253],strength:.32+energy*.22},
-    {x:.55,y:.38,rx:radius*1.32,ry:radius*1.35,color:[169,183,255],strength:.2+energy*.12}
+    {x:.445+Math.sin(phase)*.026,y:.375+Math.cos(phase)*.018,
+      rx:radius*(1+.13*Math.sin(phase+.4)),ry:radius*(1.1+.12*Math.cos(phase+.9)),color:[108,170,253],strength:gain},
+    {x:.56+Math.cos(phase+.7)*.025,y:.42+Math.sin(phase+1.1)*.022,
+      rx:radius*(.96+.12*Math.cos(phase+1.2)),ry:radius*(.95+.14*Math.sin(phase+.5)),color:[116,230,166],strength:gain*1.05},
+    {x:.49+Math.sin(phase+2)*.024,y:.46+Math.cos(phase+1.5)*.016,
+      rx:radius*(1.08+.1*Math.sin(phase+1.6)),ry:radius*(.72+.09*Math.cos(phase)),color:[108,220,230],strength:gain*.44},
+    {x:.51,y:.405,rx:radius*1.4,ry:radius*1.3,color:[181,242,225],strength:gain*.35}
   ];
   const frame=new Uint8ClampedArray(LED_SIZE*LED_SIZE*3);
   for(let y=0;y<LED_SIZE;y++)for(let x=0;x<LED_SIZE;x++) {

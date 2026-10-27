@@ -22,17 +22,27 @@ function browserHarness() {
     restore(){for(const[key,value]of Object.entries(originals))if(value===undefined)delete globalThis[key];else globalThis[key]=value;}};
 }
 
-test('voice frames are deterministic soft blue matrix data whose extent follows amplitude',()=>{
+test('voice frames are compact blue and mint diffusion with organic flow and amplitude response',()=>{
   const quiet=renderVoiceFrame(0),loud=renderVoiceFrame(.9),center=(6*16+7)*3;
   for(const frame of[quiet,loud,renderVoiceFrame(NaN,Infinity)]) {
     assert.ok(frame instanceof Uint8ClampedArray);assert.equal(frame.length,768);assert.ok(frame.every(Number.isFinite));
     assert.ok(Math.min(...frame)>=100);assert.ok(Math.max(...frame)<=255);
   }
   assert.deepEqual(quiet,renderVoiceFrame(0));
-  assert.ok(quiet[center+2]-quiet[center]>60,'quiet retains a visible blue center');
+  assert.ok(quiet[center+2]-quiet[center]>60,'quiet retains a visible colored center');
   assert.ok(quiet[(15*16)*3]>245,'the distant edge fades into the white field');
-  const blueArea=frame=>Array.from({length:256},(_,i)=>frame[i*3+2]-frame[i*3]).filter(value=>value>25).length;
-  assert.ok(blueArea(loud)>blueArea(quiet)*1.4,'real amplitude spreads the Gaussian halo');
+  const colors=frame=>Array.from({length:256},(_,i)=>[...frame.slice(i*3,i*3+3)]);
+  const coloredArea=frame=>colors(frame).filter(color=>Math.max(...color)-Math.min(...color)>25).length;
+  assert.ok(coloredArea(quiet)<=78,'quiet occupies less area than the former 104-pixel blue wash');
+  for(const at of[0,2500,5000,7500]) {
+    const frame=renderVoiceFrame(0,at),palette=colors(frame);
+    assert.ok(palette.filter(([r,g,b])=>b-g>12&&b-r>25).length>=10,'blue remains distinct');
+    assert.ok(palette.filter(([r,g,b])=>g-b>8&&g-r>25).length>=5,'mint green remains distinct');
+    const next=renderVoiceFrame(0,at+1000/60);
+    assert.ok(Math.max(...frame.map((value,index)=>Math.abs(value-next[index])))<=2,'ambient flow has no per-frame pop');
+  }
+  assert.ok(difference(quiet,renderVoiceFrame(0,2500))>1,'quiet still has deliberate ambient flow');
+  assert.ok(coloredArea(loud)>coloredArea(quiet)*1.4,'real amplitude enlarges the flowing gradient');
   assert.ok(difference(quiet,loud)>7);
   // Gaussian fields have no flat filled disk or hard ring around a sphere.
   const centerRow=Array.from({length:16},(_,x)=>quiet[(6*16+x)*3]);
