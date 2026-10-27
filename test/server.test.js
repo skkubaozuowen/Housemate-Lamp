@@ -29,6 +29,18 @@ test('config exposes only availability and missing-key path is explicit, fully u
   assert.equal((await fetch(`${origin}/API%20Key.txt`)).status, 404);
 });
 
+test('Dino browser modules are served by the static allowlist without exposing server files', async t => {
+  const { origin } = await fixture(t, { keyProvider:async () => '' });
+  for (const name of ['speech','dino-voice','voice-audio']) {
+    const response = await fetch(`${origin}/lib/${name}.js`);
+    assert.equal(response.status, 200, name);
+    assert.match(response.headers.get('content-type'), /^text\/javascript; charset=utf-8$/);
+    assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+    assert.ok((await response.text()).trim().length > 0);
+  }
+  for (const path of ['/server.js','/response-api.js','/lib/not-allowlisted.js']) assert.equal((await fetch(`${origin}${path}`)).status, 404);
+});
+
 test('explicit demo and priority boundaries never call AI', async t => {
   let networkCalls = 0;
   const { post } = await fixture(t, { keyProvider: async () => 'test-key', fetchImpl: () => { networkCalls++; } });

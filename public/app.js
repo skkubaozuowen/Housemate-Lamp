@@ -4,7 +4,7 @@ import { setupResearch } from './lib/research.js';
 import { createPlan } from './lib/catalog.js';
 import { planLocal } from './lib/planner.js';
 import { setupHardware } from './lib/hardware.js';
-import { setupSpeechInput } from './lib/speech.js';
+import { setupDinoVoice } from './lib/dino-voice.js';
 const $ = id => document.getElementById(id);
 const input = $('question');
 const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
@@ -47,10 +47,10 @@ refreshResearch = setupResearch(controller, renderer, { aiAvailable, simulateFai
 } });
 controller.emit();
 function count() { $('counter').textContent = `${input.value.length} / 2000`; }
-const speech = setupSpeechInput({ onText:count });
+const speech = setupDinoVoice({ onSubmit:text => controller.submit(text) });
 $('composer').addEventListener('submit', event => {
   event.preventDefault();
-  speech?.cancel('Voice stopped. Review or share your text.');
+  speech?.cancel();
   const text = input.value.trim();
   if (!text || text.length > 2000) return;
   void controller.submit(text);
@@ -60,7 +60,7 @@ $('composer').addEventListener('submit', event => {
 input.addEventListener('input',count);
 input.addEventListener('keydown',event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); $('composer').requestSubmit(); } });
 for (const example of document.querySelectorAll('[data-example]')) example.addEventListener('click', () => { speech?.cancel(); input.value=example.dataset.example; count(); input.focus({preventScroll:true}); });
-$('clear').addEventListener('click', () => { speech?.cancel(); controller.reset(); renderer.setGrid(false); $('view').value='diffusion'; $('workshop-note').value=''; input.value=''; count(); input.focus({preventScroll:true}); });
+$('clear').addEventListener('click', () => { speech?.off(); controller.reset(); renderer.setGrid(false); $('view').value='diffusion'; $('workshop-note').value=''; input.value=''; count(); input.focus({preventScroll:true}); });
 $('motion').addEventListener('click', () => controller.setPaused(!controller.paused));
 $('retry').addEventListener('click', () => { speech?.cancel(); if (controller.lastText) void controller.submit(controller.lastText,{retry:true}); });
 // Follow the visible phone viewport without interfering with accessibility zoom.

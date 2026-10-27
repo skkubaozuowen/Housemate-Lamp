@@ -29,6 +29,14 @@
         </div>
       </div>
       <p id="moment" hidden></p>
+      <section id="dino-stage" hidden aria-labelledby="dino-title" data-phase="listening">
+        <p class="eyebrow">DINO / VOICE</p>
+        <h2 id="dino-title">I’m listening.</h2>
+        <div id="dino-orb" aria-hidden="true"><span class="dino-orb-aura"></span><span class="dino-orb-core"></span><span class="dino-orb-sheen"></span></div>
+        <p id="dino-transcript"></p>
+        <div class="dino-turn-status"><p id="dino-caption" role="status" aria-live="polite">Take your time. I’m here.</p><span id="dino-countdown" aria-label="Silence countdown"></span></div>
+        <div class="dino-actions"><button id="dino-send" type="button">Send now</button><button id="dino-cancel" type="button">Cancel turn</button><button id="dino-type" type="button">Type instead</button></div>
+      </section>
       <p id="live-status" class="sr-only" role="status" aria-live="polite"></p>
     </section>
     <div class="bottom">
@@ -39,14 +47,14 @@
         <textarea id="question" placeholder="What's on your mind?" maxlength="2000" rows="1"></textarea>
         <div class="composer-bottom">
           <span id="counter">0 / 2000</span>
-          <button id="voice-button" type="button" aria-label="Start voice input" aria-pressed="false" aria-describedby="voice-status voice-note"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"></rect><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M9 22h6"></path></svg><span id="voice-label">Speak</span></button>
+          <button id="voice-button" type="button" aria-label="Start Dino voice" aria-pressed="false" aria-describedby="voice-status voice-note"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"></rect><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M9 22h6"></path></svg><span id="voice-label">Talk to Dino</span></button>
           <label class="sr-only" for="voice-language">Voice language</label>
           <select id="voice-language" aria-label="Voice language"><option value="zh-CN" selected>Chinese</option><option value="ko-KR">Korean</option><option value="en-US">English</option></select>
           <span class="key-hint">Enter to share</span>
           <button id="send" type="submit" aria-label="Share your moment"><span>Share</span><span aria-hidden="true">↗</span></button>
         </div>
       </form>
-      <div class="voice-help"><p id="voice-status" role="status" aria-live="polite">Choose a language, then tap Speak. Review the text before sharing.</p><p id="voice-note">Voice uses your browser’s speech service. Audio may be processed online.</p></div>
+      <div class="voice-help"><p id="voice-status" role="status" aria-live="polite">Auto-sends after 5 seconds of silence. Say “Hi Dino” to speak again while voice is on.</p><div id="dino-controls" hidden><span id="dino-wake-status" role="status" aria-live="polite">Voice is on.</span><button id="dino-listen" type="button">Talk now</button><button id="dino-off" type="button">Turn voice off</button></div><p id="voice-note">Voice uses your browser’s speech service. Audio may be processed online.</p></div>
       <footer><span id="privacy">Words stay in this moment. No saved conversation.</span><span id="lamp-page-controls" hidden><span id="lamp-page-status" role="status" aria-live="polite">USB lamp · disconnected</span><button id="lamp-page-action" type="button">Connect lamp</button></span><button id="open-research" type="button" aria-haspopup="dialog">Light study</button></footer>
     </div>
   </main>
