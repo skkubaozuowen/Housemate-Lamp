@@ -18,6 +18,14 @@ npm test
 
 Checks use Node's built-in test runner. They cover semantic priority, schema validation, request cancellation and stale results, session reset, local fallback, RGB frames, paused/hidden time and the one-render-loop contract. Browser QA and its limits are recorded in [VALIDATION.md](VALIDATION.md).
 
+## Voice input
+
+Choose **Chinese**, **Korean** or **English** beside the microphone, then click **Speak**. Chinese (`zh-CN`) is the default; Korean uses `ko-KR` and English uses `en-US`. Allow microphone access when the browser asks. **Stop** finishes recognition, leaving an editable draft in the existing input. Nothing is shared automatically: review or correct the text, then press **Share** to use the existing emotion-to-light flow. Voice does not change the 20 light responses, their colors, or Arduino control.
+
+Voice uses the browser's [SpeechRecognition API](https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition), including the prefixed `webkitSpeechRecognition` where available. Recognition availability, language support and connectivity depend on the browser and its speech service; use the working Chrome page at `http://127.0.0.1:3000/` or an HTTPS deployment. Browsers may process audio through an online speech provider, including when the lamp planner is in Local demo mode. This app adds no audio upload endpoint, recording file, persistent transcript, new API key or transcription library. Only text explicitly shared by the user follows the existing OpenAI/local planner path.
+
+Capture starts only from the microphone button. It stops after at most one minute, or on manual editing, language change, Escape, New moment, example selection, Share, Retry AI, page hiding or page exit. Interim recognition can change and is never automatically submitted. Final and interim results replace the same draft span without duplicating earlier words; the existing 2000-character limit includes the original draft. Old callbacks cannot repopulate a cleared or edited input. Permission, microphone, no-speech and network failures show actionable status while typing remains available. Unsupported or insecure browsers disable only the voice controls.
+
 ## Arduino lamp · local USB
 
 For the USB-connected lamp on this Mac, start the local service with:
@@ -89,7 +97,7 @@ Color corrections run locally in both AI and demo mode. “不要这个颜色”
 
 Manual study previews also replace conflicting old color preferences so the selected palette is actually shown. Keeping a palette and restoring a saved scene retain the intended session preferences. If every chromatic hue is declined, a real gray palette keeps exported plans reproducible; a further rejection with no permitted alternative asks for clarification.
 
-Motion feedback affects later plans. A short thanks preserves color. New moment cancels requests and invalidates late responses, clears text, preferences, scene memories and workshop notes. No database, account, analytics SDK or microphone is required. USB access uses the explicitly enabled local Node service. Refreshing closes the session; nothing is written to localStorage.
+Motion feedback affects later plans. A short thanks preserves color. New moment cancels requests and invalidates late responses, clears text, preferences, scene memories and workshop notes. No database, account or analytics SDK is used. A microphone is optional and requested only for voice input. USB access uses the explicitly enabled local Node service. Refreshing closes the session; nothing is written to localStorage.
 
 ## Code boundaries
 
@@ -105,6 +113,7 @@ Motion feedback affects later plans. A short thanks preserves color. New moment 
 | `public/app.js` | Minimal everyday interaction and responsive viewport |
 | `server.js` | Static asset allowlist and plan/config API |
 | `public/lib/hardware.js` | Explicit local USB session, latest-frame streaming and lamp controls |
+| `public/lib/speech.js` | Opt-in browser dictation, draft insertion, cancellation and voice status |
 | `lamp-bridge.js` | Loopback-only lamp API, mapping, CRC packets, ACK flow control and browser lease |
 | `hardware/serial_transport.py` | Exclusive POSIX serial I/O using Python standard library |
 | `hardware/HousemateLamp/HousemateLamp.ino` | D6 WS2812B driver, bounded parser and disconnect watchdog |

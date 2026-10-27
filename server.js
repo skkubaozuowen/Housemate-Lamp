@@ -10,7 +10,7 @@ const root = new URL('./', import.meta.url);
 const staticFiles = {
   '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'],
   '/style.css': ['style.css', 'text/css'], '/app.js': ['app.js', 'text/javascript'],
-  ...Object.fromEntries(['catalog', 'palettes', 'planner', 'renderer', 'controller', 'research', 'hardware'].map(name => [`/lib/${name}.js`, [`lib/${name}.js`, 'text/javascript']]))
+  ...Object.fromEntries(['catalog', 'palettes', 'planner', 'renderer', 'controller', 'research', 'hardware', 'speech'].map(name => [`/lib/${name}.js`, [`lib/${name}.js`, 'text/javascript']]))
 };
 function json(res, status, body) {
   if (res.destroyed || res.writableEnded) return;

@@ -4,6 +4,7 @@ import { setupResearch } from './lib/research.js';
 import { createPlan } from './lib/catalog.js';
 import { planLocal } from './lib/planner.js';
 import { setupHardware } from './lib/hardware.js';
+import { setupSpeechInput } from './lib/speech.js';
 const $ = id => document.getElementById(id);
 const input = $('question');
 const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
@@ -24,7 +25,7 @@ function update(state) {
   $('mode-message').textContent = state.fallback?.reason === 'simulated' ? 'Failure preview · The local light is responding.' : state.fallback ? 'AI is unavailable. The local demo is responding.' : 'Local demo · Light follows the examples and familiar phrases.';
   $('retry').hidden = !state.fallback?.retryable;
   $('retry').textContent = state.mode === 'ai' ? 'Retry AI' : 'Try again';
-  $('privacy').textContent = state.mode === 'ai' ? 'AI moments are sent to OpenAI. No saved conversation.' : 'Local demo. Your words stay in this browser.';
+  $('privacy').textContent = state.mode === 'ai' ? 'Text you share is sent to OpenAI. No saved conversation.' : 'Local light demo. No saved conversation.';
   const descriptions = { received:'Moment received.', processing:'Connecting this moment to light.', responding:'The light is responding.', error:'Connection interrupted. Retry is available; local demo will respond.', waiting:'There is room for another thought.', idle:'Light is ready.', preview:'Previewing a light study.' };
   $('live-status').textContent = descriptions[state.phase] || 'Light is ready.';
   refreshResearch(state);
@@ -46,8 +47,10 @@ refreshResearch = setupResearch(controller, renderer, { aiAvailable, simulateFai
 } });
 controller.emit();
 function count() { $('counter').textContent = `${input.value.length} / 2000`; }
+const speech = setupSpeechInput({ onText:count });
 $('composer').addEventListener('submit', event => {
   event.preventDefault();
+  speech?.cancel('Voice stopped. Review or share your text.');
   const text = input.value.trim();
   if (!text || text.length > 2000) return;
   void controller.submit(text);
@@ -56,10 +59,10 @@ $('composer').addEventListener('submit', event => {
 });
 input.addEventListener('input',count);
 input.addEventListener('keydown',event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); $('composer').requestSubmit(); } });
-for (const example of document.querySelectorAll('[data-example]')) example.addEventListener('click', () => { input.value=example.dataset.example; count(); input.focus({preventScroll:true}); });
-$('clear').addEventListener('click', () => { controller.reset(); renderer.setGrid(false); $('view').value='diffusion'; $('workshop-note').value=''; input.value=''; count(); input.focus({preventScroll:true}); });
+for (const example of document.querySelectorAll('[data-example]')) example.addEventListener('click', () => { speech?.cancel(); input.value=example.dataset.example; count(); input.focus({preventScroll:true}); });
+$('clear').addEventListener('click', () => { speech?.cancel(); controller.reset(); renderer.setGrid(false); $('view').value='diffusion'; $('workshop-note').value=''; input.value=''; count(); input.focus({preventScroll:true}); });
 $('motion').addEventListener('click', () => controller.setPaused(!controller.paused));
-$('retry').addEventListener('click', () => { if (controller.lastText) void controller.submit(controller.lastText,{retry:true}); });
+$('retry').addEventListener('click', () => { speech?.cancel(); if (controller.lastText) void controller.submit(controller.lastText,{retry:true}); });
 // Follow the visible phone viewport without interfering with accessibility zoom.
 const phone = matchMedia('(max-width: 600px)');
 function syncViewport() {
@@ -72,7 +75,7 @@ function syncViewport() {
 }
 window.visualViewport?.addEventListener('resize',syncViewport); window.addEventListener('resize',syncViewport);
 input.addEventListener('focus',syncViewport); input.addEventListener('blur',syncViewport); syncViewport();
-window.addEventListener('pagehide', () => { hardware?.destroy(); controller.cancel(); renderer.destroy(); },{once:true});
+window.addEventListener('pagehide', () => { speech?.destroy(); hardware?.destroy(); controller.cancel(); renderer.destroy(); },{once:true});
 
 // Configuration never blocks the input or takes over an interaction already begun.
 const initialSequence = controller.sequence;
