@@ -241,6 +241,32 @@ export function renderFrame(plan = {}, elapsedMs = 0, {reducedMotion=false,color
   return frame;
 }
 
+/** The voice field is real matrix data, using the same white-ground diffusion. */
+export function renderVoiceFrame(level=0,elapsedMs=0,{reducedMotion=false}={}) {
+  const energy=clamp(number(level,0)),time=Math.max(0,number(elapsedMs,0))/1000;
+  const breath=reducedMotion ? 0 : Math.sin(time*1.5)*energy*.012;
+  const radius=(reducedMotion ? .34 : .29+energy*.14)+breath;
+  const scene=[
+    {x:.5,y:.4,rx:radius,ry:radius*1.06,color:[105,167,250],strength:.95+energy*.85},
+    {x:.45,y:.43,rx:radius*1.65,ry:radius*1.5,color:[151,222,253],strength:.32+energy*.22},
+    {x:.55,y:.38,rx:radius*1.32,ry:radius*1.35,color:[169,183,255],strength:.2+energy*.12}
+  ];
+  const frame=new Uint8ClampedArray(LED_SIZE*LED_SIZE*3);
+  for(let y=0;y<LED_SIZE;y++)for(let x=0;x<LED_SIZE;x++) {
+    const nx=(x+.5)/LED_SIZE,ny=(y+.5)/LED_SIZE;
+    let total=0,r=0,g=0,b=0;
+    for(const field of scene) {
+      const weight=gaussian(nx,ny,field)*field.strength;
+      total+=weight;r+=field.color[0]*weight;g+=field.color[1]*weight;b+=field.color[2]*weight;
+    }
+    const coverage=1-Math.exp(-total*1.3),index=(y*LED_SIZE+x)*3;
+    frame[index]=total ? mix(255,r/total,coverage) : 255;
+    frame[index+1]=total ? mix(255,g/total,coverage) : 255;
+    frame[index+2]=total ? mix(255,b/total,coverage) : 255;
+  }
+  return frame;
+}
+
 /** Owns one cancellable RAF. The 16×16 RGB frame is the only light source. */
 export class LightRenderer {
   constructor(canvas,{gridCanvas,onComplete,onFrame}={}) {
@@ -253,6 +279,7 @@ export class LightRenderer {
     this._plan=null;this._elapsed=0;this._frame=new Uint8ClampedArray(LED_SIZE*LED_SIZE*3).fill(255);
     this._paused=false;this._reducedMotion=false;this._grid=false;this._destroyed=false;
     this._lastNow=null;this._raf=null;this._transition=null;this._pending=null;this._completed=false;
+    this._voiceActive=false;this._voiceLevel=0;this._voiceElapsed=0;this._voiceDirty=false;this._pendingVoice=null;this._redrawOnResume=false;
     this._tick=this._tick.bind(this);
     this._resize=()=>{this._measure();this._paint();};
     this._visibility=()=>{this._lastNow=null;if(document.hidden)this._cancel();else this._schedule();};
@@ -272,25 +299,53 @@ export class LightRenderer {
     if(this._paused){this._pending=next;return;}
     this._applyPlan(next);this._schedule();
   }
-  _applyPlan({plan,colors,preserveProgress=false}) {
+  _applyPlan({plan,colors,preserveProgress=false},{paint=true}={}) {
     const prior=this._plan,from=this._frame.slice();
     this._plan=plan;this._colors=colors;this._elapsed=preserveProgress&&prior ? this._elapsed : 0;
-    this._completed=false;this._lastNow=null;
-    const duration=this._reducedMotion ? 0 : clamp(number(plan.transitionMs,1500),0,5000);
-    this._transition=prior&&duration>0 ? {from,duration,elapsed:0} : null;
-    this._compose();this._paint();
+    this._completed=false;
+    // A plan may arrive while Dino is listening. Keep its new timeline pending
+    // beneath the voice field, without replacing that field or its entry fade.
+    if(this._voiceActive)return;
+    this._lastNow=null;
+    const voiceExit=Boolean(this._transition?.voice);
+    const duration=voiceExit ? 450 : this._reducedMotion ? 0 : clamp(number(plan.transitionMs,1500),0,5000);
+    this._transition=(prior||voiceExit)&&duration>0 ? {from,duration,elapsed:0,...(voiceExit?{voice:true}:{})} : null;
+    if(paint){this._compose();this._paint();}
+  }
+  setVoiceInput({active=false,level=0}={}) {
+    if(this._destroyed)return;
+    const next={active:Boolean(active),level:active ? clamp(number(level,0)) : 0};
+    const current=this._pendingVoice||{active:this._voiceActive,level:this._voiceLevel};
+    // Standby still measures the microphone. It must not repaint or restart a
+    // settled lamp when the voice field itself is inactive.
+    if(next.active===current.active&&next.level===current.level)return;
+    if(this._paused){this._pendingVoice=next;return;}
+    this._applyVoiceInput(next);this._schedule();
+  }
+  _applyVoiceInput({active,level}) {
+    if(active!==this._voiceActive) {
+      this._transition={from:this._frame.slice(),duration:450,elapsed:0,voice:true};
+      this._lastNow=null;
+      if(active)this._voiceElapsed=0;
+    }
+    this._voiceActive=active;this._voiceLevel=level;this._voiceDirty=true;
   }
   setPaused(value) {
     const paused=Boolean(value);if(paused===this._paused||this._destroyed)return;
     this._paused=paused;this._lastNow=null;
     if(paused){this._cancel();return;}
-    if(this._pending){const pending=this._pending;this._pending=null;this._applyPlan(pending);}
+    const pending=this._pending,pendingVoice=this._pendingVoice;this._pending=this._pendingVoice=null;
+    if(pending)this._applyPlan(pending,{paint:false});
+    if(pendingVoice)this._applyVoiceInput(pendingVoice);
+    if(pending||pendingVoice||this._redrawOnResume){this._redrawOnResume=false;this._compose();this._paint();}
     this._schedule();
   }
   setReducedMotion(value) {
     const reduced=Boolean(value);if(reduced===this._reducedMotion)return;
     this._reducedMotion=reduced;
-    if(!this._paused){this._transition=null;this._compose();this._paint();this._schedule();}
+    if(this._paused){this._redrawOnResume=true;return;}
+    if(!this._voiceActive&&!this._transition?.voice)this._transition=null;
+    this._compose();this._paint();this._schedule();
   }
   setGrid(value){this._grid=Boolean(value);this._paint();}
   _measure() {
@@ -304,13 +359,16 @@ export class LightRenderer {
     }
   }
   _compose() {
-    if(!this._plan)return;
-    const target=renderFrame(this._plan,this._elapsed,{reducedMotion:this._reducedMotion,colors:this._colors});
+    if(!this._plan&&!this._voiceActive&&!this._transition)return;
+    const target=this._voiceActive ? renderVoiceFrame(this._voiceLevel,this._voiceElapsed,{reducedMotion:this._reducedMotion})
+      : this._plan ? renderFrame(this._plan,this._elapsed,{reducedMotion:this._reducedMotion,colors:this._colors})
+        : new Uint8ClampedArray(LED_SIZE*LED_SIZE*3).fill(255);
     if(this._transition) {
       const progress=ease(this._transition.elapsed/this._transition.duration);
       this._frame=target.map((value,index)=>mix(this._transition.from[index],value,progress));
       if(progress>=1)this._transition=null;
     } else this._frame=target;
+    this._voiceDirty=false;
   }
   _paint() {
     if(!this.context)return;
@@ -339,24 +397,30 @@ export class LightRenderer {
     ctx.beginPath();for(let i=1;i<LED_SIZE;i++){ctx.moveTo(i*w/LED_SIZE,0);ctx.lineTo(i*w/LED_SIZE,h);ctx.moveTo(0,i*h/LED_SIZE);ctx.lineTo(w,i*h/LED_SIZE);}ctx.stroke();
   }
   _tick(now) {
-    this._raf=null;if(this._destroyed||this._paused||document.hidden||!this._plan)return;
+    this._raf=null;if(this._destroyed||this._paused||document.hidden||(!this._plan&&!this._voiceActive&&!this._transition))return;
     // Hidden time and paused time are excluded; ordinary elapsed time is absolute.
     const delta=this._lastNow===null ? 0 : Math.max(0,now-this._lastNow);this._lastNow=now;
-    this._elapsed+=delta;if(this._transition)this._transition.elapsed+=delta;
+    if(this._voiceActive)this._voiceElapsed+=delta;else this._elapsed+=delta;
+    if(this._transition)this._transition.elapsed+=delta;
     this._compose();this._paint();
-    if(!this._plan.loop&&!this._completed&&this._elapsed>=number(this._plan.durationMs,2000)) {
+    if(!this._voiceActive&&this._plan&&!this._plan.loop&&!this._completed&&this._elapsed>=number(this._plan.durationMs,2000)) {
       this._completed=true;const completedPlan=this._plan;this.onComplete?.(completedPlan);
     }
     this._schedule();
   }
   _schedule(){
-    if(this._raf!==null||this._destroyed||this._paused||document.hidden||!this._plan)return;
+    if(this._raf!==null||this._destroyed||this._paused||document.hidden)return;
+    if(this._voiceActive) {
+      if(!this._transition&&!this._voiceDirty&&this._reducedMotion)return;
+      this._raf=requestAnimationFrame(this._tick);return;
+    }
+    if(!this._plan&&!this._transition)return;
     // A settled finite scene and a static/reduced-motion loop need no redraws.
     // Finite reduced-motion scenes still run their lifecycle completion clock.
-    const isLoop=Boolean(this._plan.loop);
-    if(!this._transition&&((!isLoop&&this._completed)||(isLoop&&(this._reducedMotion||this._plan.motionPrimitive==='hold'))))return;
+    const isLoop=Boolean(this._plan?.loop);
+    if(!this._transition&&(!this._plan||(!isLoop&&this._completed)||(isLoop&&(this._reducedMotion||this._plan.motionPrimitive==='hold'))))return;
     this._raf=requestAnimationFrame(this._tick);
   }
   _cancel(){if(this._raf!==null){cancelAnimationFrame(this._raf);this._raf=null;}}
-  destroy(){this._destroyed=true;this._cancel();this._observer?.disconnect();window.removeEventListener('resize',this._resize);document.removeEventListener('visibilitychange',this._visibility);this._pending=null;}
+  destroy(){this._destroyed=true;this._cancel();this._observer?.disconnect();window.removeEventListener('resize',this._resize);document.removeEventListener('visibilitychange',this._visibility);this._pending=this._pendingVoice=null;this._voiceActive=false;this._voiceDirty=false;}
 }

@@ -36,11 +36,11 @@ class Clock {
   }
 }
 function harness(t, {secure = true, recognition = true, microphone = true, permission} = {}) {
-  const ids = ['voice-button','voice-label','voice-status','voice-language','question','dino-stage','dino-orb','dino-title','dino-transcript','dino-caption','dino-countdown','dino-controls','dino-wake-status','dino-listen','dino-off','dino-send','dino-cancel','dino-type'];
+  const ids = ['voice-button','voice-label','voice-status','voice-language','question','dino-stage','dino-title','dino-transcript','dino-caption','dino-countdown','dino-controls','dino-wake-status','dino-listen','dino-off','dino-send','dino-cancel','dino-type'];
   const elements = new Map(ids.map(id => [id,new Element()]));
   const document = Object.assign(new Target(), {hidden:false,body:new Element(),getElementById:id => elements.get(id) || null});
   const window = Object.assign(new Target(), {isSecureContext:secure});
-  const instances = [], contexts = [], streams = [], calls = [], submitted = [], raf = new Map();
+  const instances = [], contexts = [], streams = [], calls = [], submitted = [], states = [], raf = new Map();
   let rafId = 0;
   const makeStream = () => {
     const track = Object.assign(new Target(), {readyState:'live',stops:0,stop(){this.stops++;this.readyState='ended';this.fire('ended');}});
@@ -73,10 +73,10 @@ function harness(t, {secure = true, recognition = true, microphone = true, permi
   };
   elements.get('voice-language').value = 'zh-CN';
   elements.get('question').value = 'Keep this typed draft.';
-  const voice = setupDinoVoice({document,window,onSubmit:async text => {submitted.push(text);}});
+  const voice = setupDinoVoice({document,window,onSubmit:async text => {submitted.push(text);},onState:state => states.push({...state})});
   const clock = new Clock(); voice.timers = clock; voice.now = () => clock.time;
   t.after(() => voice.destroy());
-  return {voice,clock,document,window,instances,contexts,streams,calls,submitted,raf,makeStream,$:id => elements.get(id),
+  return {voice,clock,document,window,instances,contexts,streams,calls,submitted,states,raf,makeStream,$:id => elements.get(id),
     async enable(language = 'zh-CN') { elements.get('voice-language').value=language; elements.get('voice-button').click(); await flush(); },
     sample() { const callbacks=[...raf.values()];raf.clear();for(const fn of callbacks)fn(0); }
   };
@@ -105,7 +105,8 @@ test('explicit Dino enable wires actual meter samples, recognition and inline co
   assert.equal(h.$('voice-button').getAttribute('aria-pressed'),'true'); assert.equal(h.$('voice-language').disabled,true);
   assert.equal(h.$('dino-controls').hidden,false); assert.equal(h.$('dino-send').disabled,true);
   h.sample();
-  assert.ok(Number(h.$('dino-orb').style.getPropertyValue('--voice-level'))>0,'The orb receives amplitude from the supplied PCM samples.');
+  assert.ok(h.states.at(-1).level>0,'The shared light renderer receives amplitude from the supplied PCM samples.');
+  assert.equal(h.states.at(-1).phase,'listening');
   assert.deepEqual(h.contexts[0].source.connections,[h.contexts[0].analyser],'No microphone audio is connected to a speaker.');
   h.instances[0].onresult(result('오늘 행복해요'));
   assert.equal(h.$('dino-transcript').textContent,'오늘 행복해요'); assert.equal(h.$('dino-send').disabled,false);
@@ -154,6 +155,8 @@ test('hidden, Escape, off and destroy release capture and ignore old callbacks w
     if(mode==='off')h.$('dino-off').click();
     if(mode==='destroy')h.voice.destroy();
     assert.equal(h.voice.enabled,false,mode); assert.equal(h.streams[0].track.stops,1,mode);
+    assert.equal(h.states.at(-1).enabled,false,`${mode} releases the shared voice light`);
+    assert.equal(h.states.at(-1).level,0,`${mode} clears the last microphone level`);
     assert.equal(h.contexts[0].closes,1,mode); assert.equal(h.raf.size,0,mode); assert.equal(h.clock.jobs.size,0,mode);
     assert.equal(old.aborts,1,mode); assert.equal(h.$('dino-stage').hidden,true,mode);
     assert.equal(h.$('dino-controls').hidden,true,mode); assert.equal(h.document.body.classList.contains('dino-speaking'),false,mode);

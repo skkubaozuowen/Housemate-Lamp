@@ -207,7 +207,7 @@ export class DinoVoice {
   destroy() { this.destroyed = true; this.off(); }
 }
 
-export function setupDinoVoice({ document:doc = globalThis.document, window:win = globalThis.window, onSubmit = async () => {} } = {}) {
+export function setupDinoVoice({ document:doc = globalThis.document, window:win = globalThis.window, onSubmit = async () => {}, onState = () => {} } = {}) {
   const $ = id => doc.getElementById(id);
   const button = $('voice-button'), stage = $('dino-stage');
   if (!button || !stage) return null;
@@ -221,7 +221,6 @@ export function setupDinoVoice({ document:doc = globalThis.document, window:win 
     const shown = ['starting','listening','finishing','sending'].includes(state.phase);
     stage.hidden = !shown; stage.dataset.phase = state.phase;
     doc.body.classList.toggle('dino-speaking', shown);
-    $('dino-orb').style.setProperty('--voice-level', state.level.toFixed(3));
     put('dino-title', ({starting:'Hello, I’m Dino.',listening:'I’m listening.',finishing:'One moment.',sending:'A little light for you.'})[state.phase] || 'I’m here.');
     put('dino-transcript', state.transcript || (state.phase === 'starting' ? 'Waiting for microphone permission…' : 'Say what’s on your mind.'));
     put('dino-caption', state.message);
@@ -232,12 +231,14 @@ export function setupDinoVoice({ document:doc = globalThis.document, window:win 
     button.setAttribute('aria-pressed', String(state.enabled));
     button.setAttribute('aria-label', state.enabled ? 'Talk to Dino now' : 'Start Dino voice');
     $('dino-controls').hidden = !state.enabled;
-    put('dino-wake-status', state.phase === 'standby' ? 'Mic on · Say “Hi Dino”, then speak when the blue light appears' : state.phase === 'sending' ? 'Voice on · Preparing light' : 'Mic on · Listening to you');
+    put('dino-wake-status', state.phase === 'standby' ? 'Mic on · Say “Hi Dino”, then speak when the blue glow appears' : state.phase === 'sending' ? 'Voice on · Preparing light' : 'Mic on · Listening to you');
     $('dino-listen').disabled = state.phase !== 'standby';
     $('dino-send').disabled = state.phase !== 'listening' || !state.transcript.trim();
     $('dino-cancel').disabled = state.phase === 'sending';
     $('voice-language').disabled = state.enabled;
     if (!state.supported) put('voice-status', 'Dino voice is unavailable here. Try Chrome with microphone access, or keep typing.');
+    // The shared 16×16 renderer owns the light; this adapter owns only controls.
+    onState(state);
   };
   voice = new DinoVoice({ recognitionFactory:Recognition && win.isSecureContext ? () => new Recognition() : null, meter, onState:render, onSubmit });
   const bindings = [];

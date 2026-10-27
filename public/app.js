@@ -47,7 +47,10 @@ refreshResearch = setupResearch(controller, renderer, { aiAvailable, simulateFai
 } });
 controller.emit();
 function count() { $('counter').textContent = `${input.value.length} / 2000`; }
-const speech = setupDinoVoice({ onSubmit:text => controller.submit(text) });
+const speech = setupDinoVoice({
+  onState:state => renderer.setVoiceInput({active:['starting','listening','finishing'].includes(state.phase), level:state.level}),
+  onSubmit:text => controller.submit(text)
+});
 $('composer').addEventListener('submit', event => {
   event.preventDefault();
   speech?.cancel();
