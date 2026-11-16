@@ -49,7 +49,7 @@ controller.emit();
 function count() { $('counter').textContent = `${input.value.length} / 2000`; }
 const speech = setupDinoVoice({
   onState:state => renderer.setVoiceInput({active:['starting','listening','finishing'].includes(state.phase), level:state.level}),
-  onSubmit:text => controller.submit(text)
+  onSubmit:text => controller.submit(text, {fromVoice:true})
 });
 $('composer').addEventListener('submit', event => {
   event.preventDefault();

@@ -1,8 +1,12 @@
 // These are prototype design hypotheses, to be compared and revised in workshops.
 export const MOTION_PRIMITIVES = Object.freeze(['hold', 'slow_drift', 'pass', 'expand', 'converge', 'separate', 'alternate', 'blend', 'settle', 'interrupt_return', 'local_echo']);
 export const NEXT_STATES = Object.freeze(['idle', 'hold', 'waiting', 'accompany', 'withdraw']);
+export const EXPRESSIONS = Object.freeze(['default', 'quiet', 'renew', 'fulfilled', 'tense', 'anticipation', 'neutral', 'bittersweet']);
 
-const definitions = [
+// The study repertoire: five exchange states and six everyday situations.
+export const VISIBLE_RESPONSE_TYPES = Object.freeze(['greet', 'acknowledge', 'processing', 'clarify', 'farewell', 'celebrate', 'setback', 'rest', 'upcoming', 'mixed', 'everyday']);
+
+const legacyDefinitions = [
   ['B01','idle','Idle','待机','대기','Slow color fields wander along the edges.','Space and very slow drift may suggest availability without asking for attention.','lilac_blush','slow_drift',.25,.23,.38,14000,true,1000,'idle',false],
   ['B02','acknowledge','Received','接收确认','수신 확인','One soft cloud blooms locally, lifts slightly and settles.','A single local light nod may mark receipt without agreement.','lilac_blush','pass',.42,1.1,.6,1200,false,260,'hold',false],
   ['B03','processing','Processing','处理中','처리 중','Two compact color fields orbit while a request is pending.','A small continuous loop may distinguish pending work from a completed response.','sea_glass','converge',.4,.7,.55,1800,true,350,'hold',false],
@@ -24,8 +28,32 @@ const definitions = [
   ['R07','withdraw','Give space','尊重独处','혼자 있는 시간 존중','Motion gradually stops while the color remains.','Stillness without compulsory dimming may respect an explicit boundary.','lilac_blush','settle',.24,.28,.46,3000,false,750,'withdraw',true],
   ['R08','repair','Revise','道歉与修正','사과와 수정','A diagonal sweep visibly replaces the previous field.','A visible parameter change may make correction tangible; preferences must actually persist.','rose_lavender','blend',.42,.45,.62,2300,false,650,'hold',false],
 ];
+const frameworkDefinitions = [
+  ['B01','greet','Listening','开始倾听','듣기 시작','A small irregular blue-green glow opens and follows the voice.','A visible opening and a shared field mark availability.','sea_glass','expand',.48,.58,.66,2600,false,650,'hold',false],
+  ['B02','acknowledge','Received','收到表达','발화 수신','The current glow gathers gently and releases one pulse, carrying its color into the next response.','One continuous gesture marks receipt without implying agreement.','luminous_current','expand',.48,.8,.7,1400,false,400,'hold',false],
+  ['B03','processing','Thinking','正在处理','처리 중','Two soft luminous balls separate from the received glow and orbit together while a real request is pending.','Continuous paired movement makes thinking visible and can unfold into the next situation.','luminous_current','slow_drift',.44,.9,.58,4500,true,550,'hold',false],
+  ['B04','clarify','A little more?','等待补充','조금 더 들려주세요','One soft glow probes to a side, hesitates, returns and tries another direction, then waits.','An interrupted exploratory movement leaves room for continuation.','sea_glass','alternate',.4,.44,.55,4200,false,650,'waiting',true],
+  ['B05','farewell','Until next time','交流结束','대화 마무리','The glow gathers once and returns to ordinary ambient light.','A gathering gesture closes the exchange without a blackout.','sea_glass','converge',.4,.42,.65,3800,false,1000,'idle',false],
+  ['S01','celebrate','Good news & anticipation','好事与期待','좋은 일과 기대','Warm apricot, gold and rose bloom in layered ripples, fade gently, and leave blue-violet-green twinkles flowing onward.','Shared delight and positive anticipation can range from quiet recognition to an expansive celebration with a gentle ambient tail.','apricot_rose','expand',.76,.72,.88,8000,false,1000,'hold',false],
+  ['S02','setback','A difficult moment','不顺与接纳','속상한 순간','Violet and rose-red waves flow beneath differently sized red and blue glows that softly appear, drift and disappear in staggered cycles. An expressed new attempt instead lets gold enter and become warm yellow with gentle star-like twinkles.','Continuing waves with passing red and blue glows stay with discomfort; gradually emerging gold supports an expressed willingness to try again.','dusk_indigo','slow_drift',.52,.34,.78,9000,false,1100,'hold',false],
+  ['S03','rest','After a tiring day','疲惫与休息','지친 하루','A broad sloping cyan veil opens, lowers and gradually slows into a spacious resting field.','Opening space and easing downward distinguish rest from the recurring tide of a difficult moment.','mist_blue','slow_drift',.5,.3,.76,10000,false,1200,'hold',false],
+  ['S04','upcoming','A little courage','紧张时给予勇气','긴장에 용기를','A wavering violet glow settles as peach-gold warmth rises through it and opens into a broad, steady breathing field.','A single connected gesture acknowledges expressed nervousness and offers courage without predicting an outcome.','horizon_glow','settle',.56,.4,.72,12000,false,1000,'hold',false],
+  ['S05','mixed','Interwoven feelings','交织的感受','겹쳐진 감정','Luminous color gradients travel along the light field, gradually replacing neighboring colors through soft continuous transitions.','Several feelings can coexist and interweave through color, flow and space without requiring a single label or a fixed dominant color.','mixed_warm_cool','blend',.62,.4,.8,11000,false,1200,'hold',false],
+  ['S06','everyday','Everyday sharing','日常分享','일상 이야기','Three scattered warm pinpoints ripple once to acknowledge the words, then blend into two broad cream-apricot lights that breathe and wander independently.','A restrained acknowledgment receives ordinary facts and plans when no distinct feeling or support need is expressed.','peach_amber','local_echo',.4,.42,.5,4200,false,850,'hold',false],
+];
+// Keep older saved scenes and internal control states readable, without showing
+// the previous twenty-item repertoire as the current design framework.
+const definitions = [...frameworkDefinitions, ...legacyDefinitions.filter(row => !VISIBLE_RESPONSE_TYPES.includes(row[1]))];
 export const RESPONSE_TYPES = Object.freeze(definitions.map(row => row[1]));
 export const CATALOG = Object.freeze(Object.fromEntries(definitions.map(([id,responseType,label,zh,ko,description,hypothesis,paletteFamily,motionPrimitive,energy,speed,amplitude,durationMs,loop,transitionMs,nextState,requiresUserInput]) => [responseType,Object.freeze({id,label,zh,ko,description,hypothesis,paletteFamily,motionPrimitive,energy,speed,amplitude,durationMs,loop,transitionMs,nextState,requiresUserInput})])));
+
+// These native responses finish their opening once, then keep a quieter
+// moving field. A custom primitive or explicit hold retains its own lifecycle.
+export function hasAmbientTail(plan) {
+  if (!plan || plan.loop || plan.motionPrimitive !== CATALOG[plan.responseType]?.motionPrimitive) return false;
+  return ['mixed','everyday','setback','upcoming'].includes(plan.responseType)
+    || (plan.responseType === 'celebrate' && plan.expression !== 'quiet');
+}
 
 let sequence = 0;
 export function createPlan(type = 'idle', overrides = {}) {
@@ -33,5 +61,7 @@ export function createPlan(type = 'idle', overrides = {}) {
   const {id,label,zh,ko,description,hypothesis,...parameters} = CATALOG[responseType];
   // One seed per plan, never per frame. Explicit seeds make workshop runs repeatable.
   const seed = ((Date.now() & 0xffffffff) ^ Math.imul(++sequence, 2654435761)) >>> 0;
-  return {version:1,responseType,...parameters,paletteVariant:'balanced',colorCount:3,seed,...overrides};
+  return {version:1,responseType,...parameters,expression:'default',paletteVariant:'balanced',colorCount:['mixed','upcoming'].includes(responseType) ? 4 : 3,
+    feelingPrimary:'joy',feelingSecondary:responseType === 'mixed' ? 'sadness' : 'none',feelingBalance:.7,
+    mixedMode:'paired',feelingTertiary:'none',seed,...overrides};
 }

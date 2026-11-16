@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createHash} from 'node:crypto';
-import {RESPONSE_TYPES,createPlan} from '../public/lib/catalog.js';
+import {createPlan} from '../public/lib/catalog.js';
 import {LightRenderer,renderFrame,renderVoiceFrame} from '../public/lib/renderer.js';
 
 const difference=(a,b)=>a.reduce((sum,value,index)=>sum+Math.abs(value-b[index]),0)/a.length;
@@ -55,14 +54,6 @@ test('reduced motion fixes voice geometry in time while measured levels still ch
   assert.ok(difference(quiet,loud)>1);
   const darkest=frame=>Array.from({length:256},(_,i)=>frame[i*3]).indexOf(Math.min(...Array.from({length:256},(_,i)=>frame[i*3])));
   assert.equal(darkest(quiet),darkest(loud),'level changes never displace the center');
-});
-
-test('the other 19 scene frames remain byte-for-byte unchanged by the R02 water-flow revision',()=>{
-  const hash=createHash('sha256');
-  // Captured from HEAD before revising R02. Its intentionally changed geometry
-  // is excluded; the other responses retain their existing exact RGB frames.
-  for(const type of RESPONSE_TYPES.filter(type=>type!=='accompany')){const plan=createPlan(type,{seed:4589});for(const p of[0,.17,.42,.8,1,3])hash.update(renderFrame(plan,plan.durationMs*p));}
-  assert.equal(hash.digest('hex'),'3364b056fbef1a80e4a614c74a13039f6b530926305b89717fa48490b58abc5b');
 });
 
 test('voice shares one renderer RAF, source pixels, grid and emitted RGB while freezing the base timeline',()=>{

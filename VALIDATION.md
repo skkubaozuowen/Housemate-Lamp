@@ -1,5 +1,191 @@
 # Prototype validation
 
+## Two-second voice silence threshold · 2026-11-16 · v3.8.1
+
+Complete suite: **282 passed, 0 failed**. `git diff --check` passed.
+
+- Changed the default voice silence threshold from five seconds to two seconds. Initial page help and active-listening captions now both say two seconds. Existing final recognition collection, wake listening, manual controls, text input and light compositions are unchanged.
+- Updated existing fake-clock checks: no early finishing at 1,999 ms, finishing at 2,000 ms, continued speech resets the timer, unvoiced noise and final-only corrections do not reset it, and a turn submits once. All thirty voice tests passed. Browser confirmed “Auto-sends after 2 seconds of silence.” Screenshot: `outputs/housemate-v3.8.1-voice-two-seconds.jpg`.
+- Static files are served fresh by the existing running local Node service, so no server restart or lamp disconnection was needed. No live microphone capture or physical lamp retest was performed.
+
+## S02 flowing tide with passing red/blue glows · 2026-11-16 · v3.8.0
+
+Complete suite: **282 passed, 0 failed**. `git diff --check` passed.
+
+- Native ordinary S02 retains its violet/rose-red waves and adds five independently staggered diffused glows, using the selected palette's red and blue roles. Their sizes differ; each gently appears, expands, drifts and fully disappears before returning. Cycle positions and sizes change only while the glow is invisible. The finite opening still completes once while the waves and spot cycles continue.
+- The default third swatch is now blue `#81B7FF`. Named/kept colors and smaller color counts use the same selected palette slots, so the renderer injects no hardcoded accent hues. The retry branch retains its previous geometry, violet/red opening, golden transition and warm star finish.
+- A rendering regression isolates the blue role to verify visible appearance, complete fade and a later return; separate connected footprints verify different spot sizes. Existing monochrome checks retain the two tidal folds. Zero amplitude, reduced motion and smooth adjacent frames pass. Independent audit across three seeds through forty seconds at 60 Hz found a maximum channel step of 4/255. Renewal and the other ten visible native responses remained byte-identical to the pre-spots renderer; named single hues and gray remained intact.
+- Actual RGB-frame animation and contact sheet: `outputs/housemate-v3.8-s02-waves-spots.gif` and `outputs/housemate-v3.8-s02-waves-spots-contact.png`. Browser screenshot: `outputs/housemate-v3.8-s02-waves-spots.jpg`.
+
+The local service remains running at http://127.0.0.1:3000/. No deployment or repository push was made. No physical lamp or live microphone session was repeated.
+
+## S02 violet and visible rose red · 2026-11-16 · v3.7.2
+
+Complete suite: **281 passed, 0 failed**. `git diff --check` passed.
+
+- Matched the requested reference's violet/rose-red color relationship with a clearly visible rose-red second tide, replacing the initially too-subtle rose-violet tint. The default opening pair is `#BDA3FC` and `#FF8494`; existing wave geometry, diffusion, rhythm and lifecycle are unchanged.
+- Renewal begins with the same revised violet/red pair, then retains its existing golden transition and warm star finish. Other response palettes and render code are unchanged. Existing regressions verify the shared introduction, visible violet/red without a default golden transition, and the sparse warm renewal ending. Palette checks retain luminosity and hue exclusions.
+- Browser: “我好倒霉，下雨了。” returned actual AI `setback` and displayed the revised diffused violet/red waves. Text and Talk to Dino remained available. Screenshot: `outputs/housemate-v3.7.2-s02-violet-red.jpg`.
+
+The local service remains running at http://127.0.0.1:3000/. No deployment or repository push was made. No physical lamp or live microphone session was repeated.
+
+## Situation boundaries and courage for nervousness · 2026-11-16 · v3.7.0
+
+Complete suite: **281 passed, 0 failed**. Changed module syntax checks and `git diff --check` passed.
+
+- S01 now includes positive anticipation. S04 is reserved for expressed nervousness, worry or a request for courage. A bare future presentation is S06 ordinary sharing. Current catalog labels, AI instructions, local fallback and Light study use these same meanings; older stored plan names remain readable.
+- Fixed the rain/bad-luck misclassification: setback recognition covers expressed bad luck, frustration and ruined plans in Chinese, English and Korean. Weather and meal keywords no longer make an unfamiliar narrative locally authoritative as everyday sharing, so the AI can interpret its full meaning. Negated anticipation and nervousness have regression coverage. Server tests deliberately return incorrect upstream labels to verify the canonical boundaries, and verify that provisional everyday fallbacks do not override an AI-recognized setback.
+- S04 is one twelve-second gesture: a softly wavering violet field opens at the sides as peach/gold warmth rises from within, then a broad, steady warm breath continues. It has no retry constellation or celebration ending. The renderer uses the effective selected palette throughout, with luminous white joins between violet and warm colors. One native S04 expression remains in Light study.
+- Six actual configured AI calls returned the intended classes: bad luck in rain and a rain-ruined walk → S02; neutral rain and a bare presentation → S06; positive anticipation → S01; a nervous presentation → S04. Browser verification also confirmed actual AI S02 for “我好倒霉，下雨了” and S04 for a request for courage. Text input, Talk to Dino and the current layout remain available.
+- Independent RGB audit: seeds 0, 4589 and 4294967295 sampled through forty seconds at 60 Hz had a maximum adjacent-channel step of 2/255. Warm breathing continued, with violet retained at the sides. Zero amplitude, reduced motion, seven named hues and seven single-hue bans passed. Across 3,160 unaffected response/voice frames, output matched v3.6 exactly, including S02 renewal, S05 and S06.
+- Screenshot: `outputs/housemate-v3.7-s04-courage.jpg`. Actual RGB-frame animation and contact sheet: `outputs/housemate-v3.7-s04-courage.gif` and `outputs/housemate-v3.7-s04-courage-contact.png`.
+
+The local service remains running at http://127.0.0.1:3000/. No deployment or repository push was made. No physical lamp or live microphone session was repeated.
+
+## Warm renewal and one shared S04 choreography · 2026-11-16 · v3.6.0
+
+Complete suite: **276 passed, 0 failed**. Changed module syntax checks and `git diff --check` passed.
+
+- S02/default remains the same cool tide. S02/renew uses a twelve-second violet-to-yellow opening: warm yellow enters from the side, broadens through the violet field, then the violet recedes and the broad warm glow releases into seven sparse gold/cream points. The warm points continue twinkling with a faint warm resident glow. All colors come from the effective palette; the stars add no hidden finishing hues.
+- S04 now has one connected twelve-second composition and one Light study expression option. A spacious violet current opens first; gold enters the same flow; a warm breath grows within it while violet remains around the edges. Tension, anticipation, a bare future event and encouragement requests all create the same default/horizon_glow profile. Existing saved expression names remain schema-valid and render through the same choreography; old palette families remain readable.
+- Violet and yellow meet through a smooth luminous white shoulder rather than a muddy complementary RGB average. Renderer regressions verify cool acknowledgment, yellow entry, a warm phase and sparse moving stars, plus S04 coexistence, continuing breath, identical geometry for legacy expression names, soft frame steps, amplitude zero and reduced motion. Profile/HTTP tests verify that old S04 expression arguments and stale overrides cannot restore separate native variants.
+- Four actual AI calls returned the intended profiles: retry after a setback → setback/renew/renewal_gold; bare presentation tomorrow, nervous presentation and anticipated meeting → upcoming/default/horizon_glow, all twelve seconds with four colors. Browser checks confirmed actual AI renewal and an actual tense/anticipatory S04 turn. Light study listed only “Uncertainty, anticipation & encouragement” for S04. Text entry and Talk to Dino remained available, with no captured console errors.
+- Across 2,400 frames, all unaffected visible responses, including S02/default, S01, S05 and S06, stayed byte-identical to the previous renderer. Sampled voice frames were also byte-identical. Screenshots: `outputs/housemate-v3.6-s02-gold-stars.jpg` and `outputs/housemate-v3.6-s04-shared-current.jpg`. Actual RGB-frame animation/contact sheet: `outputs/housemate-v3.6-gold-horizon.gif` and `outputs/housemate-v3.6-gold-horizon-contact.png`.
+
+The local service remains running at http://127.0.0.1:3000/. No deployment or repository push was made. No physical lamp or live microphone session was repeated.
+
+## Selected S02/S04 framework expressions · 2026-11-15 · v3.5.0
+
+Complete suite: **276 passed, 0 failed**. Changed module syntax and `git diff --check` passed.
+
+- S02 selects two framework directions: blue-violet tides stay with discomfort; an explicitly expressed willingness to try again preserves the same initial tide, then aqua/mint waves grow through it. The renewal accent is a moving wave rather than the previous amber round fields. S04 selects three distinct expressions: neutral uncertainty uses violet tangential wisps around open space; anticipation uses rising warm streams; tension or a request for courage uses a broad warm apricot/rose breath. The local planner, AI prompt, profile palettes and study labels agree on these choices.
+- Native S02/S04 keep their own gentle movement after their finite introduction, without restarting it. Tests cover once-only completion, one RAF, pause/hidden time, switching AI/demo without resetting time, new-input/repair/stop interruption, static manual Hold, zero amplitude and reduced motion. Rendered evidence covers the same cool first half of S02, gradual green emergence only for renewal, distinct S04 geometry even with the same color, violet negative space and clear warm breathing.
+- Read-only audit across five seeds and five variants found continuous motion through forty seconds, including veil wrap points and duration boundaries. Maximum adjacent 60 Hz channel step was 4/255. Named blue, gray and declined hues remained valid through the normal preference path. Across 2,160 frames, all nine other visible responses (including the new S06 and S05), plus sampled voice frames, stayed byte-identical to the previous renderer.
+- Five actual configured AI checks all returned source AI and the intended profiles: sadness → S02/default/dusk_indigo; wanting to try again → S02/renew/regrowth_glow; a bare upcoming presentation → S04/neutral/violet_current; anticipating a meeting → S04/anticipation/peach_amber; nervous presentation → S04/tense/apricot_rose. Browser verification used an actual nervous-presentation turn and an actual retry-after-setback turn. Text entry and Talk to Dino remain available.
+- Screenshots: `outputs/housemate-v3.5-s04-courage.jpg` and `outputs/housemate-v3.5-s02-regrowth.jpg`. Actual renderer-frame comparison: `outputs/housemate-v3.5-s02-s04-flow.gif` and `outputs/housemate-v3.5-s02-s04-contact.png`.
+
+The local service remains running at http://127.0.0.1:3000/. No deployment or repository push was made. No physical lamp or live microphone session was repeated.
+
+## Distributed S06 acknowledgment · 2026-11-15 · v3.4.5
+
+Complete suite: **276 passed, 0 failed**. Changed module syntax and `git diff --check` passed.
+
+- S06 now opens with three scattered warm pinpoints and compact soft ripples. Each location answers once with a staggered smooth brightness envelope. The broad resident field enters gradually as these echoes fade, then the existing two large halos continue breathing and wandering. All opening shapes use the currently selected palette; no celebration colors or continuing sparkles are introduced.
+- The renderer regression checks several distinct opening centers distributed across both matrix axes, a change in the leading response location, smooth adjacent frames, and the existing separated two-halo tail, motion controls and lifecycle. Comparison against the preceding renderer found 4,800 non-S06 frames and 446 S06 ambient-tail frames byte-identical.
+- Browser: entered “今天去散步了。”, confirmed actual AI S06/everyday with its finite 4.2-second plan, and retained the main page after completion. Text entry and Talk to Dino remained available; no console errors were captured. Screenshot: `outputs/housemate-v3.4.5-s06-echo.jpg`. Actual RGB-frame opening/tail preview and contact sheet: `outputs/housemate-v3.4.5-s06-echo.gif` and `outputs/housemate-v3.4.5-s06-contact.png`.
+
+The local service remains running at http://127.0.0.1:3000/. No deployment or repository push was made.
+
+## Directional S05 color transport · 2026-11-15 · v3.4.4
+
+Complete suite: **276 passed, 0 failed**. Changed renderer syntax and `git diff --check` passed.
+
+- Open S05 now transports the existing blue/aqua/pink/lime palette along its diagonal axis. The continuous clock moves the color coordinate through a reflected sequence, so neighboring colors gradually replace one another without a final-to-first jump. The luminous soft mask, white edges and gentle curvature remain. Paired/layered compositions retain their feeling allocation while a traveling color ripple moves within the regions.
+- Tests now check observable directional transport: chromatic features match positions farther along the diagonal several seconds later, more closely than their original or reverse positions. Other checks cover the palette passing through visible regions over time, continuous tails, soft matrix gradients, amplitude zero, reduced motion, explicit blue/gray palettes, declined intermediate hues and contextual emphasis. Across five sampled seeds and three modes over forty seconds, adjacent 60 Hz frames changed by at most one RGB channel step.
+- Across 1,600 actual frames, all ten non-S05 visible responses, including the enlarged wandering S06, remained byte-identical to the preceding renderer. Layout, voice and API classification were not changed.
+- Browser: entered “今天心里五味杂陈，说不清是什么感觉。”, confirmed source AI and S05/open, and checked the diagonal gradient on the main page. Text entry and Talk to Dino remained available. Screenshot: `outputs/housemate-v3.4.4-s05-color-flow.jpg`. Supplementary actual RGB-frame animation/contact sheet: `outputs/housemate-v3.4.4-s05-flow.gif` and `outputs/housemate-v3.4.4-s05-contact.png`.
+
+The local service remains running at http://127.0.0.1:3000/. No deployment or repository push was made. The existing layered crest mask can still make an individual secondary/tertiary color very faint at a wave trough; this revision does not change that mask.
+
+## Broader, independently wandering S06 · 2026-11-15 · v3.4.3
+
+Complete suite: **276 passed, 0 failed**. Changed module syntax and `git diff --check` passed.
+
+- The initial local glow now separates clearly into two larger halos, with final radii around .29/.275 of the field. Each follows a different slow two-dimensional path while continuing its gentle breathing. A minimum center spacing prevents the broad halos from merging into one indistinct mass; the opening still runs once.
+- Read-only sampling across eight seeds and 1,792 frames from 4.2 to 60 seconds retained two distinct luminous centers, with chromatic coverage of 68–125 of the 256 pixels. Each center moved 3–4 LED columns and 5–6 rows. Additional default peach/amber palette samples also retained two centers. Adjacent 60 Hz frames changed by at most one RGB channel step in these sampled runs.
+- Renderer regressions now cover broad coverage, visible separation, independent movement on both axes, continued breathing, smooth boundaries and static motion controls. Across 1,600 frames, the ten non-S06 visible responses remained byte-identical to the preceding renderer.
+- Browser: entered “今天去散步了。”, confirmed AI S06/everyday and the finite native plan, then visually checked the enlarged separated warm lights after completion. Text and voice controls remained available; no console errors were captured. Screenshot: `outputs/housemate-v3.4.3-s06-wandering.jpg`.
+
+The local service remains running at http://127.0.0.1:3000/. No deployment or repository push was made.
+
+## S06 breathing finish · 2026-11-15 · v3.4.2
+
+Complete suite: **276 passed, 0 failed**. Changed module syntax checks and `git diff --check` passed.
+
+- S06's local acknowledgment plays once, then gently separates into two filled cream/apricot lights. Their brightness and radius breathe slowly with a small phase offset and minimal positional drift. The native scene and its clock remain active after completion; the opening does not loop.
+- Tests cover two distinct luminous centers through the tail, continuous breathing, stable positions, a smooth completion boundary, bounded adjacent-frame changes, static zero amplitude and reduced motion, manual hold, one completion and one RAF, pause/hidden time, AI/demo switching, and interruption by stop, color correction or new input.
+- Across 1,600 actual frames, all ten non-S06 visible responses remained byte-identical to the pre-revision renderer.
+- Browser: entered “今天去散步了。”, confirmed source AI, S06/everyday, finite 4.2-second local_echo and nextState hold after the opening. The main page retained two warm soft lights; Talk to Dino and text input remained available. No console errors were captured. Screenshot: `outputs/housemate-v3.4.2-s06.jpg`.
+
+The local service remains running at http://127.0.0.1:3000/. No deployment or repository push was made.
+
+## Reference-based S05 appearance · 2026-11-15 · v3.4.1
+
+Final complete suite: **275 passed, 0 failed**. Renderer/controller syntax and `git diff --check` passed. This revision changes S05 appearance and its default open palette; classification, layout and voice modules retain their existing behavior.
+
+- Open S05 follows the original D05 co-design's continuous diagonal gradient and exact saved swatches: #42BAFF, #3EDBD6, #ED8ADE and #B5EB58. A single soft mask interpolates the colors along a rotated axis, with gentle curvature, breathing and white edges. Separate dense color clouds are removed.
+- Layered S05 follows D04's broad flowing wavy ribbons with white gaps and sparse tiny glimmers. Paired S05 connects contextual gradients in one luminous field while retaining optional visual emphasis. Native finite openings still lead to moving ambient tails.
+- Tests cover diagonal chromatic progression, luminous channels and white space, color presence in layered fields, continuous motion, reduced motion, pause/queued plans, handoffs, named hues and explicit gray. Optional declined-hue metadata is passed into the renderer and saved in exports. Gradient segments that would regenerate a declined hue instead pass smoothly through white.
+- Across 1,600 actual frames, all ten non-S05 visible responses remained byte-identical to the pre-revision renderer. Voice frames were also byte-identical.
+- Browser: reloaded the final local service, typed “今天心里五味杂陈，说不清是什么感觉。”, confirmed actual AI S05/open, and visually checked the continuous cyan/pink/lime gradient on the compact main page. Text entry and Talk to Dino remain available. No console errors were captured. Screenshot: `outputs/housemate-v3.4.1-reference.jpg`. Actual renderer-frame artifacts: `outputs/housemate-v3.4.1-s05-reference.gif` and `outputs/housemate-v3.4.1-s05-contact.png`.
+
+The local service remains running at http://127.0.0.1:3000/. Live microphone capture and a physical lamp were not retested. No deployment or repository push was made.
+
+## Interwoven feelings · 2026-11-15 · v3.4.0
+
+Final complete suite: **272 passed, 0 failed**, including loopback HTTP, saved scenes, color preferences, voice, shared matrix/USB output and renderer lifecycle regressions. Changed app/research syntax checks and `git diff --check` passed.
+
+- S05 now unfolds into two or three irregular color regions made from overlapping soft lobes. Each follows a different rhythm of translation, stretching and partial overlap, then continues at a gentler amplitude after the finite opening. There is no rigid orbit or repeated introduction. Existing B03-to-scene handoffs remain continuous. S01's native celebration was checked across 161 actual frames over twenty seconds and remained byte-identical to the previous renderer.
+- `mixedMode` distinguishes paired, layered and open compositions. Paired preserves two concrete feeling strands; layered preserves three. Open responds to explicitly complex or hard-to-name feelings with comparable aqua, pink-purple and peach regions, rather than asserting which emotions are present. The retained legacy feeling fields in an open plan are ignored. Visual emphasis 0.5 gives balanced regions in both two- and three-region compositions; larger values can give the primary more area.
+- Warm-only joy/hope, cool-only calm/sadness and warm/cool combinations are available. Tests check all three modes, independent motion through the ambient tail, smooth gradients, relative emphasis, named-color limits, hue exclusions, reduced motion, and paused behavior. New mode/tertiary information survives keeping a palette, receipt/processing, saving, restoring and exporting; no conversation text is added.
+- The semantic boundary now keeps ordinary anticipation plus nervousness in S04, fatigue plus fulfilment in S03, and difficulty plus willingness to retry in S02. Explicit happiness while alone remains S01. Emotional layering, graduation joy with attachment, and explicitly complex or difficult-to-name emotional accounts can enter S05. The default S05 Light study preview is an open, balanced composition.
+- Nine actual configured AI checks all returned `source:ai`: happy while alone → S01; birthday joy with disappointment → S05 paired joy/sadness/0.8; graduation joy with reluctance to leave → S05 paired joy/sadness/0.5; 五味杂陈 → S05 open; explicitly complex joy, disappointment and anticipation → S05 layered joy/sadness/hope/0.5; explicitly complex joy and anticipation → S05 paired joy/hope (all warm); presentation anticipation plus nervousness → S04 tense; tired but fulfilled → S03 fulfilled; difficulty plus wanting to retry → S02 renew.
+- Browser: reloaded the final service, typed “今天发生了好多事，心里五味杂陈，说不清是什么感觉。”, and confirmed `source:ai`, `mixedMode:open`, four rendered colors and balanced emphasis in Light study. The main page visibly showed aqua, purple and peach diffusing together while text input and Talk to Dino remained available. No console errors were captured. Screenshot: `outputs/housemate-v3.4-interwoven.jpg`. Supplementary `outputs/housemate-v3.4-s05-flow.gif` and `outputs/housemate-v3.4-s05-contact.png` are generated from actual renderer RGB frames.
+
+The local service remains running at http://127.0.0.1:3000/ with the original layout and Arduino connection controls. No live microphone or physical lamp session was retested in this revision. No deployment, GitHub push or Railway monitoring was started.
+
+## Connected exchange and contextual mixed feelings · 2026-11-15 · v3.3.0
+
+Final complete suite: **257 passed, 0 failed**, including real loopback HTTP integration, voice lifecycle, controller, preferences, serial bridge and renderer tests. `git diff --check` and changed app/research syntax checks passed.
+
+- B03 now uses two softly filled luminous balls, with no hollow ring. B04 uses a single exploratory glow that probes, pauses, returns and tries another direction; the final quarter remains still while inviting more input.
+- B02 inherits the listening/current scene's colors and carries them into real pending processing. Renderer handoffs continue the outgoing motion and unfold incoming geometry from the previous light positions. At the transition start the exact displayed frame is retained, including interruption during another transition. Fast/local results do not manufacture a processing delay.
+- Transition tests cover B02/B03 into all six situations, exact native endpoints, one RAF, no blank frame, paused replacement, reduced motion and bounded 60 Hz frame changes. Independent frame checks found maximum per-channel steps of 4–7 across those transitions. S01's native celebration was compared over 241 frames across thirty seconds and remained byte-identical to v3.2.
+- S05 now retains two contextual feeling gradients and a primary visual share between 0.5 and 0.9. Related colors within each glow form soft internal gradients; primary and companion differ in area and keep independent motion after the introduction. Tests verify stronger primary coverage, reversed feeling roles, spatial/temporal gradient smoothness and exact named/kept palettes with hue exclusions. Semantic pairs are included in saved scenes and exports; no conversation text is added.
+- Solitude is separated from expressed loneliness. Explicit happiness while alone celebrates; explicit joy plus loneliness can be mixed. Bare/contrasting solitude stories stay open to contextual AI interpretation. Actual anticipation plus worry can also be mixed; wanting to calm down does not automatically invent a second current feeling.
+- Real configured AI checks returned `source:ai`: “虽然一个人过生日，但我真的很开心。” → celebrate/apricot_rose; “生日很开心，但也有点孤单。” → mixed/joy/sadness/0.8; “有一点开心，但是特别孤单和难过。” → mixed/sadness/joy/0.8; “我生日了但是是一个人。” → mixed/joy/sadness/0.55. The final restarted service also returned mixed/anxiety/hope/0.65 for “对新的工作有些期待，也担心自己适应不了。”, and repeated the happy-alone celebration correctly.
+- Browser: typed the happy-alone birthday and confirmed S01 with source AI in Light study; then typed the happy/lonely birthday and confirmed S05 joy/sadness/0.8 and four rendered colors. The main view visibly retained the large gold glow and smaller blue companion after the introduction. Talk to Dino and text input remain available; no console errors were captured. Screenshot: `outputs/housemate-v3.3-mixed.jpg`. `outputs/housemate-v3.3-transitions.gif` records actual LightRenderer frames for voice → B02 → B03 → S05/S01.
+
+The final local service remains running at http://127.0.0.1:3000/ with the Arduino connection controls available. No physical USB lamp or live microphone session was retested in this revision; their existing protocol/lifecycle regressions pass. No deployment, repository push or periodic Railway monitoring was started.
+
+## Soft gradients and distinct movement · 2026-11-15 · v3.2.0
+
+Complete suite: **240 passed, 0 failed**, including loopback HTTP integration, controller, voice, hardware bridge and renderer regressions. `git diff --check` passed. The main layout and voice modules remain unchanged.
+
+- S02 retains slowly folding blue-violet tides. S03 now lowers and broadens a sloping cyan veil, decelerating into rest; it no longer repeats the same pair of wave bands. Same-palette frame comparisons also distinguish their movement structures. Explicit ongoing companionship retains continuous motion.
+- S05 uses related rose, peach and lilac-blue colors with broad overlapping fields and continuous independent movement. B02 is a blended local nod/ripple. B03 uses two feathered hollow rings orbiting with traveling highlights, at approximately 4.4 seconds per revolution with the default speed. Their related palettes use smooth color blending.
+- B04 uses an incomplete arc that probes, hesitates, retreats, then tries another direction. Its final quarter is static before the waiting state. Frame tests verify both the hesitation and final pause; B03 loop seams remain continuous, while zero amplitude and reduced motion remain static.
+- S01 rendering was compared across 160 frames over twenty seconds and remained byte-identical to the preceding version. Preference-controlled colors, S01/S05 moving tails, manual motion choices and shared 768-byte matrix frames remain covered.
+- Browser: reloaded the running service and clicked all six changed Light study entries. The visible plans matched S02, S03, S05, B02, B03 and B04, including B03's 4500 ms loop and B04's 4200 ms finite waiting response. A synthetic “I'm home.” turn removed the welcome view; the B03 preview visibly displayed the two hollow halos on the main page. No browser console errors were captured. Screenshot: `outputs/housemate-v3.2-thinking.jpg`. The supplementary six-panel `outputs/housemate-v3.2-flow-preview.gif` uses actual renderer frames over ten seconds.
+
+The local service remains running at http://127.0.0.1:3000/. No physical Arduino or live microphone session was retested in this visual revision.
+
+## Living flow and good-news interpretation · 2026-11-15 · v3.1.0
+
+Complete suite: **237 passed, 0 failed**, including HTTP integration, voice regression and renderer lifecycle tests. The main layout, CSS and voice modules are unchanged.
+
+- S01 plays the opening once, fades out the warm wash, then continues nine independently twinkling and drifting points. Allowed finishing colors are blue, violet and mint; palette locks and individual hue exclusions still control the actual RGB colors.
+- S05 retains independently moving/morphing warm and cool regions after its finite opening. Tail completion does not replace the native scene with hold; changing AI/demo preserves its elapsed time. New input, correction, pause, hold, withdrawal and reduced motion retain their intended controls. The renderer emits completion once and keeps one RAF while a tail is active.
+- Rounded B02/B03 blue-cyan-violet fields replace the flattened processing shape. Local color weighting reduces broad gray mixtures where different hue regions overlap while preserving soft brightness coverage. Voice halo RGB generation is unchanged.
+- Good-news meaning precedes a generic future-time cue across birthdays, graduation, reunion and job acceptance. Unfamiliar future stories remain open to AI classification. Negative/mixed birthdays and nervous upcoming events retain their respective responses.
+- Real configured OpenAI checks: “我明天生日” → S01; an unfamiliar synthetic story about moving into a long-awaited new home tomorrow → S01; nervous presentation tomorrow → S04 tense. All returned `source:ai`.
+- Browser: an actual typed future birthday returned AI celebration; after its eight-second opening the main page displayed the separate blue/violet/mint glimmers, with the plan still native and finite. A following mixed-feeling birthday returned AI S05 and retained its moving color regions after the opening. No browser console errors were captured; Talk to Dino remained available. Screenshots: `outputs/housemate-v3.1-celebration.jpg` and `outputs/housemate-v3.1-mixed.jpg`. The supplementary `outputs/housemate-v3.1-flow-preview.gif` is generated from actual renderer frames for S01 and S05 over twenty seconds.
+
+The local service remains at http://127.0.0.1:3000/. This session did not retest a physical Arduino or capture live microphone speech.
+
+## Situation framework · 2026-11-15 · v3.0.0
+
+Final complete suite: **227 passed, 0 failed**, Node 24.21.0, including actual loopback HTTP integration. `git diff --check` passed. No dependency installation or build step was added.
+
+- Five exchange signals and six everyday situation families, with bounded expression variants. Tests cover quiet recognition, setbacks with/without an expressed new attempt, fatigue with fulfilment, tense/positive/neutral upcoming events, and simultaneous positive/negative feelings.
+- Temporary named colors yield to a new emotional scene; explicit palette keeping, hue exclusions, combined corrections, cancellation and stale-result protection remain covered. Late celebration accents obey the effective color preferences and exports record their actual RGB values.
+- Deterministic RGB checks cover distinct spatial and temporal signatures, simultaneous warm/cool regions through the ending, the clarification pause, finite endpoints, continuous invited companionship, and reduced motion.
+- Existing speech/voice lifecycle, five-second silence submission, English wake phrase with selected-language handoff, measured-volume halo, shared matrix/USB frames and serial bridge tests pass. Voice modules and main-page CSS were not changed.
+- Actual configured OpenAI requests returned `source:ai`: synthetic birthday-with-loneliness-and-joy → `mixed / bittersweet / mixed_warm_cool`; synthetic nervous presentation → `upcoming / tense / sea_glass`.
+- Browser: all eleven preview buttons returned their corresponding response plans. Switching S02 to Ready to try again loaded `renew / recovery_glow / 4` and replayed. An actual typed mixed-feeling turn completed through AI on the main page. The compact layout retained text input, Talk to Dino, language choice and lamp controls, with distinct warm/cool fields visible together. Screenshot: `outputs/housemate-v3-mixed.png`.
+
+The local service is running at http://127.0.0.1:3000/ with USB control available. No USB board was detected in this session, so physical-lamp response was not retested. Live microphone recognition was not repeated; its behavior is covered by the existing regression tests. No deployment or periodic Railway monitoring was started.
+
 ## Initial automated checks · 2026-10-21
 
 `npm test`: **36 passed, 0 failed** on Node 24.21.0. No dependency installation or build is necessary. Local HTTP integration tests require permission to bind a loopback port in the Codex sandbox; the complete suite was run successfully with that permission.

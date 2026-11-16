@@ -1,15 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createHash} from 'node:crypto';
-import {CATALOG,RESPONSE_TYPES,createPlan} from '../public/lib/catalog.js';
+import {CATALOG,RESPONSE_TYPES,VISIBLE_RESPONSE_TYPES,createPlan,hasAmbientTail} from '../public/lib/catalog.js';
 import {PALETTE_FAMILIES,PALETTE_VARIANTS,NAMED_COLOR_FAMILIES,selectPalette,colorGroup} from '../public/lib/palettes.js';
 import {renderFrame,LightRenderer} from '../public/lib/renderer.js';
 
 const fixed = type => createPlan(type,{seed:4589,paletteFamily:'lilac_blush',paletteVariant:'balanced'});
 const difference = (a,b) => a.reduce((total,value,index)=>total+Math.abs(value-b[index]),0)/a.length;
 
-test('20 catalog scenes produce deterministic, bounded 16×16 RGB data',()=>{
-  assert.equal(RESPONSE_TYPES.length,20);
+test('current repertoire and legacy scenes produce deterministic, bounded 16×16 RGB data',()=>{
+  assert.equal(VISIBLE_RESPONSE_TYPES.length,11);
+  assert.ok(RESPONSE_TYPES.length>=VISIBLE_RESPONSE_TYPES.length);
   for(const type of RESPONSE_TYPES) {
     const plan=fixed(type),at=plan.durationMs*.37;
     const frame=renderFrame(plan,at);
@@ -44,24 +44,6 @@ test('purpose-specific geometry distinguishes nearby responses with identical co
   }
 });
 
-test('the favorite three-ripple celebration remains byte-for-byte unchanged',()=>{
-  // Captured before the geometry revision. All parameters and RGB colors are
-  // explicit so catalog or palette improvements cannot invalidate the baseline.
-  const plan={version:1,responseType:'celebrate',motionPrimitive:'expand',paletteFamily:'apricot_rose',paletteVariant:'balanced',colorCount:3,seed:4589,energy:.62,speed:.65,amplitude:.75,durationMs:4200,loop:false,transitionMs:1400,nextState:'idle',requiresUserInput:false};
-  const colors=[[255,209,102],[242,143,181],[255,197,163]];
-  const baseline=[
-    [0,'0f08b609822ae33fd1de0df0b2a0edcec948b5a57d44a26ac9e9ce2069364a6f'],
-    [420,'7d7cb66ecbface16113495cd2d27a782fdc4960b8deb71519141a7dd5f195833'],
-    [1050,'2e47bc000506db8c9c2ab51bb5ecb5561bd5d6ab4bc51a54404ead1e432408a4'],
-    [1890,'66cbeb7ab631687f89196cc9f939ae703259f3e420d267d81a48bd24102c4d38'],
-    [2940,'3a0383f5c64a5f6d3da93bb7eaf06e6be68182a54847a069c9c17cc0832626c4'],
-    [3990,'e926bdaf6086b9a645c6dc53aa83b8e7065307abcd3e739c9b850c2c793f3549'],
-    [4200,'0f08b609822ae33fd1de0df0b2a0edcec948b5a57d44a26ac9e9ce2069364a6f'],
-    [6000,'0f08b609822ae33fd1de0df0b2a0edcec948b5a57d44a26ac9e9ce2069364a6f'],
-  ];
-  for(const [elapsed,hash] of baseline)assert.equal(createHash('sha256').update(renderFrame(plan,elapsed,{colors})).digest('hex'),hash,`celebration at ${elapsed}ms`);
-});
-
 test('receipt and retry stay soft through their brightness and direction changes',()=>{
   for(const type of ['acknowledge','error'])for(const amplified of [false,true]) {
     const plan=createPlan(type,{seed:4589,...(amplified?{energy:1,amplitude:1,speed:2}:{})});
@@ -79,8 +61,8 @@ test('receipt and retry stay soft through their brightness and direction changes
   }
 });
 
-test('finite scenes stop and hold; reduced-motion scenes do not keep drifting',()=>{
-  for(const type of RESPONSE_TYPES.filter(type=>!CATALOG[type].loop)) {
+test('ordinary finite scenes hold; ambient tails continue; reduced-motion scenes do not keep drifting',()=>{
+  for(const type of RESPONSE_TYPES.filter(type=>!CATALOG[type].loop&&!hasAmbientTail(fixed(type)))) {
     const plan=fixed(type);
     assert.deepEqual(renderFrame(plan,plan.durationMs),renderFrame(plan,plan.durationMs+60000),type);
   }
@@ -94,6 +76,14 @@ test('finite scenes stop and hold; reduced-motion scenes do not keep drifting',(
   assert.ok(difference(renderFrame(waves,seam-1000/120),renderFrame(waves,seam+1000/120))<.3,'continuous wave flow crosses the catalog loop boundary without a reset');
   const hold=createPlan('accompany',{seed:100,motionPrimitive:'hold'});
   assert.deepEqual(renderFrame(hold,100),renderFrame(hold,7000));
+  for(const type of ['celebrate','mixed','everyday','setback','upcoming']) {
+    const scene=fixed(type);
+    assert.ok(difference(renderFrame(scene,scene.durationMs),renderFrame(scene,scene.durationMs+13000))>.5,`${type} retains its ambient motion`);
+    for(const override of [{motionPrimitive:'hold'},...(type==='celebrate'?[{expression:'quiet'}]:[])]) {
+      const finite={...scene,...override};
+      assert.deepEqual(renderFrame(finite,finite.durationMs),renderFrame(finite,finite.durationMs+13000),'manual hold and quiet recognition remain finite');
+    }
+  }
 });
 
 test('finite gesture speed changes its bounded flow and seed varies the spatial origin',()=>{
@@ -121,7 +111,7 @@ test('zero amplitude removes processing orbits, company wave flow, and the thank
 });
 
 test('every palette variant respects all declined hue groups, including a conflicting lock',()=>{
-  assert.equal(Object.keys(PALETTE_FAMILIES).length,19);
+  assert.ok(['mixed_warm_cool','recovery_glow','rest_glow'].every(id=>PALETTE_FAMILIES[id]));
   const groups=['blue','pink','purple','green','yellow','orange','red'];
   const combinations=[...groups.map(group=>[group]),['blue','purple','pink'],groups];
   for(const family of Object.keys(PALETTE_FAMILIES)) for(const variant of PALETTE_VARIANTS) for(const avoidedColors of combinations) {
@@ -215,4 +205,81 @@ test('pause freezes frame and crossfade, queues the latest network result, and e
     assert.equal(renderer.elapsedMs,400,'hidden time is excluded');
     renderer.destroy();
   } finally {browser.restore();}
+});
+
+test('receipt, thinking and the selected response retain one moving light field through their handoffs',()=>{
+  for(const responseType of ['celebrate','setback','rest','upcoming','mixed','everyday']) {
+    const browser=browserHarness();
+    try {
+      const renderer=new LightRenderer(browser.canvas());
+      renderer.setPlan(createPlan('acknowledge',{seed:4589,transitionMs:0}));
+      browser.tick(0);browser.tick(400);
+      let captured=renderer.frame.slice();
+      renderer.setPlan(createPlan('processing',{seed:4589,transitionMs:800}));
+      assert.deepEqual(renderer.frame,captured,'thinking starts at the exact displayed receipt');
+      browser.tick(400);browser.tick(800);
+      assert.ok(difference(renderer.frame,captured)>1,'the cloud separates while the outgoing receipt keeps moving');
+      browser.tick(1200);browser.tick(1800);
+      captured=renderer.frame.slice();
+      const incoming=createPlan(responseType,{seed:4589,transitionMs:1000});
+      renderer.setPlan(incoming);
+      assert.deepEqual(renderer.frame,captured,'a real result can replace thinking immediately, from its actual visible frame');
+      browser.tick(1800);
+      let prior=renderer.frame.slice();
+      for(let time=1816;time<2850;time+=16) {
+        browser.tick(time);
+        const maxStep=Math.max(...Array.from(renderer.frame,(value,i)=>Math.abs(value-prior[i])));
+        assert.ok(maxStep<=15,`${responseType} has no hard adjacent-frame jump during the handoff`);
+        assert.ok(renderer.frame.some(value=>value<245),'the light never passes through a blank white frame');
+        assert.equal(browser.queue.size,1,'all transition and response motion shares one RAF');
+        prior=renderer.frame.slice();
+      }
+      assert.deepEqual(renderer.frame,renderFrame(incoming,renderer.elapsedMs),'the bridge ends in the exact native response');
+      renderer.destroy();
+    } finally {browser.restore();}
+  }
+});
+
+test('optional celebration accents survive a queued pause and are copied with the selected colors',()=>{
+  const browser=browserHarness();
+  try {
+    const renderer=new LightRenderer(browser.canvas());
+    renderer.setPlan(createPlan('idle',{seed:1}));
+    renderer.setPaused(true);
+    const scene=createPlan('celebrate',{seed:4589,transitionMs:0});
+    const colors=selectPalette(scene),accentColors=selectPalette({paletteFamily:'sea_glass',colorCount:1});
+    const capturedColors=colors.map(rgb=>[...rgb]),capturedAccents=accentColors.map(rgb=>[...rgb]);
+    renderer.setPlan(scene,{colors,accentColors});
+    colors[0].fill(0);accentColors[0].fill(255);
+    renderer.setPaused(false);browser.tick(0);browser.tick(scene.durationMs*.95);
+    assert.deepEqual(renderer.frame,renderFrame(scene,scene.durationMs*.95,{colors:capturedColors,accentColors:capturedAccents}),
+      'the queued scene retains its actual accent rather than outside array mutations');
+    renderer.destroy();
+  } finally {browser.restore();}
+});
+
+test('ambient tails complete once but retain one RAF, pause and hidden-time behavior',()=>{
+  for(const type of ['celebrate','mixed','everyday','setback','upcoming']) {
+    const browser=browserHarness();
+    try {
+      const completed=[],renderer=new LightRenderer(browser.canvas(),{onComplete:scene=>completed.push(scene)});
+      const scene=createPlan(type,{seed:4589,transitionMs:0});
+      renderer.setPlan(scene);browser.tick(0);browser.tick(scene.durationMs);
+      assert.deepEqual(completed,[scene]);assert.equal(browser.queue.size,1,'the ambient tail stays scheduled after its opening ends');
+      const openingEnd=renderer.frame.slice();browser.tick(scene.durationMs+4000);
+      assert.ok(difference(renderer.frame,openingEnd)>.5,'the ending is not a frozen frame');
+      assert.equal(completed.length,1,'continuing ambience never completes the finite opening again');
+      renderer.setPaused(true);const paused=renderer.frame.slice(),elapsed=renderer.elapsedMs;
+      browser.tick(100000);assert.deepEqual(renderer.frame,paused);assert.equal(renderer.elapsedMs,elapsed);
+      renderer.setPaused(false);browser.tick(100000);browser.tick(100500);
+      assert.equal(renderer.elapsedMs,elapsed+500,'manual pause contributes no hidden tail time');
+      browser.visibility(true);assert.equal(browser.queue.size,0);browser.visibility(false);
+      browser.tick(200000);browser.tick(200500);
+      assert.equal(renderer.elapsedMs,elapsed+1000,'tab hiding contributes no hidden tail time');
+      renderer.setReducedMotion(true);const still=renderer.frame.slice();browser.tick(201000);
+      assert.deepEqual(renderer.frame,still);assert.equal(browser.queue.size,0,'reduced motion stops the continuing RAF');
+      assert.equal(completed.length,1);
+      renderer.destroy();
+    } finally {browser.restore();}
+  }
 });

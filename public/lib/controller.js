@@ -1,6 +1,6 @@
-import { createPlan } from './catalog.js';
+import { createPlan, hasAmbientTail } from './catalog.js';
 import { planLocal, normalizePlan, validatePlan, normalizePreferences, applyPreferences } from './planner.js';
-import { PALETTE_FAMILIES, selectPalette, isPaletteAllowed, resolvePaletteFamily } from './palettes.js';
+import { PALETTE_FAMILIES, selectPalette, colorGroup, isPaletteAllowed, isSemanticMixedPalette, paletteSettings, resolvePaletteFamily } from './palettes.js';
 
 /** Coordinates one request and one rendering timeline. No transcript is persisted. */
 export class SessionController {
@@ -33,14 +33,29 @@ export class SessionController {
       savedScenes: this.savedScenes, feedback: this.feedback, historyCount: this.history.length };
   }
   emit() { this.onChange(this.snapshot()); }
-  display(plan) {
+  display(plan, { preserveProgress = false } = {}) {
     this.plan = normalizePlan(plan);
     // The exported/current plan must describe the palette actually on screen,
     // including a session lock or a fallback after a declined color.
     const lock = this.preferences.lockedPalette;
-    if (lock && isPaletteAllowed(lock.paletteFamily, this.preferences)) Object.assign(this.plan, lock);
+    if (lock && (isPaletteAllowed(lock.paletteFamily, this.preferences)
+      || isSemanticMixedPalette(lock) && !this.preferences.rejectedPalettes.includes(lock.paletteFamily))) Object.assign(this.plan, lock);
     this.plan.paletteFamily = resolvePaletteFamily(this.plan, this.preferences) || 'neutral_gray';
-    this.renderer.setPlan(this.plan, { colors: selectPalette(this.plan, this.preferences) });
+    const colors = selectPalette(this.plan, this.preferences);
+    // Late celebration flecks are optional: a named/kept palette or a declined
+    // hue must never acquire an extra color behind the user's choice.
+    const allowStars = this.plan.responseType === 'celebrate' && this.plan.expression !== 'quiet'
+      && this.plan.paletteFamily === 'apricot_rose' && this.plan.colorCount === 3
+      && !lock && !this.preferences.rejectedPalettes.includes('dream_sparkles');
+    // Filter individual star hues: declining blue can leave violet and mint,
+    // rather than removing the whole finishing gesture or slipping blue back in.
+    const stars = PALETTE_FAMILIES.dream_sparkles?.variants[this.plan.paletteVariant] || [];
+    const accentColors = allowStars ? stars.slice(0, 3)
+      .map(hex => hex.match(/[a-f\d]{2}/gi).map(value => parseInt(value, 16)))
+      .filter(color => !this.preferences.avoidedColors.includes(colorGroup(color))) : [];
+    this.rendering = { colors, accentColors,
+      ...(this.preferences.avoidedColors.length ? { avoidedColors:[...this.preferences.avoidedColors] } : {}) };
+    this.renderer.setPlan(this.plan, { ...this.rendering, preserveProgress });
     this.emit();
   }
   cancel() {
@@ -51,7 +66,7 @@ export class SessionController {
     this.requesting = false;
     this.afterError = null;
   }
-  async submit(rawText, { retry = false } = {}) {
+  async submit(rawText, { retry = false, fromVoice = false } = {}) {
     const text = rawText.trim();
     if (!text || text.length > 2000) return false;
     this.cancel();
@@ -64,8 +79,11 @@ export class SessionController {
     const local = planLocal(text, context);
     this.preferences = normalizePreferences(local.preferences);
     if (!retry) this.history = [...this.history, { role: 'user', content: text }].slice(-10);
-    const receipt = createPlan('acknowledge', { paletteFamily: this.plan.paletteFamily,
-      paletteVariant: this.plan.paletteVariant, colorCount: this.plan.colorCount, seed: this.plan.seed });
+    // A receipt belongs to the same exchange: keep the listening/current
+    // field's colors while it gathers and splits into the pending light.
+    const bridgePalette = fromVoice ? { paletteFamily:'sea_glass', paletteVariant:'balanced', colorCount:3 }
+      : this.plan.responseType === 'idle' ? {} : paletteSettings(this.plan);
+    const receipt = createPlan('acknowledge', { ...bridgePalette, seed: local.plan.seed });
     // Boundaries and corrections should start changing light immediately.
     const immediate = local.priority && ['withdraw', 'repair'].includes(local.plan.responseType);
     if (immediate) {
@@ -134,8 +152,7 @@ export class SessionController {
       if (this.pending) this.resolvePending();
       else if (this.requesting) {
         this.phase = 'processing';
-        this.display(createPlan('processing', { paletteFamily: this.plan.paletteFamily,
-          paletteVariant: this.plan.paletteVariant, seed: this.plan.seed }));
+        this.display(createPlan('processing', { ...paletteSettings(this.plan), seed: this.plan.seed }));
       }
       return;
     }
@@ -150,17 +167,23 @@ export class SessionController {
     this.settle(next);
   }
   settle(next = 'hold') {
-    const palette = { paletteFamily: this.plan.paletteFamily, paletteVariant: this.plan.paletteVariant,
-      colorCount: this.plan.colorCount, seed: this.plan.seed };
+    const palette = { ...paletteSettings(this.plan), seed: this.plan.seed };
     this.stableState = next;
     this.phase = next === 'waiting' ? 'waiting' : 'idle';
     let stable;
-    if (next === 'accompany') stable = createPlan('accompany', { ...palette });
+    if (next === 'accompany') stable = createPlan('rest', { ...palette, loop:true, nextState:'accompany' });
     else if (next === 'idle') stable = createPlan('idle', { ...palette });
     else stable = createPlan(next === 'withdraw' ? 'withdraw' : 'wait', {
       ...palette, motionPrimitive: 'hold', energy: 0, amplitude: 0, loop: true,
       nextState: next, requiresUserInput: next === 'waiting', transitionMs: 900 });
-    // Freeze at the actual endpoint, rather than jumping to a new composition.
+    // The opening gesture finishes once; these scenes retain a living ambient
+    // tail instead of restarting the burst or freezing the final frame.
+    if (next === 'hold' && hasAmbientTail(this.plan)) {
+      this.stablePlan = this.plan;
+      this.emit();
+      return;
+    }
+    // Other finite responses retain their actual endpoint.
     if (next === 'hold' || next === 'withdraw' || next === 'waiting') {
       this.stablePlan = normalizePlan({ ...this.plan, motionPrimitive: 'hold', loop: true, energy: 0, amplitude: 0, nextState: next });
       this.emit();
@@ -175,11 +198,14 @@ export class SessionController {
     this.emit();
   }
   setMode(mode) {
+    const stable = this.stablePlan || createPlan('idle');
+    const preserveProgress = hasAmbientTail(this.plan) && hasAmbientTail(stable)
+      && stable.responseType === this.plan.responseType && stable.seed === this.plan.seed;
     this.cancel();
     this.mode = mode === 'ai' ? 'ai' : 'demo';
     this.fallback = null;
     this.phase = 'idle';
-    this.display(this.stablePlan || createPlan('idle'));
+    this.display(stable, { preserveProgress });
   }
   preview(plan, { replacePalette = true } = {}) {
     this.cancel();
@@ -190,7 +216,8 @@ export class SessionController {
     if (replacePalette) {
       // A deliberate study preview is also a new color choice. Old session
       // locks must not silently make the controls preview a different palette.
-      const tags = PALETTE_FAMILIES[preview.paletteFamily].tags;
+      const tags = isSemanticMixedPalette(preview)
+        ? selectPalette(preview, { ...this.preferences, lockedPalette:null }).map(colorGroup) : PALETTE_FAMILIES[preview.paletteFamily].tags;
       this.preferences = normalizePreferences({ ...this.preferences, lockedPalette:null,
         avoidedColors:this.preferences.avoidedColors.filter(color => !tags.includes(color)),
         rejectedPalettes:this.preferences.rejectedPalettes.filter(family => family !== preview.paletteFamily) });
@@ -220,9 +247,14 @@ export class SessionController {
   }
   saveScene() {
     const scene = { name: `Study ${this.savedScenes.length + 1}`, plan: structuredClone(this.plan),
-      preferences: structuredClone(this.preferences) };
+      preferences: structuredClone(this.preferences), rendering:structuredClone(this.rendering) };
     this.savedScenes.push(scene);
     this.emit();
+  }
+  exportScene() {
+    // The optional late accent is captured along with the main palette, so an
+    // exported study records the exact colors rather than just a family name.
+    return { version:1, plan:structuredClone(this.plan), rendering:structuredClone(this.rendering) };
   }
   restoreScene(index) {
     const scene = this.savedScenes[index];

@@ -54,7 +54,7 @@
           <button id="send" type="submit" aria-label="Share your moment"><span>Share</span><span aria-hidden="true">↗</span></button>
         </div>
       </form>
-      <div class="voice-help"><p id="voice-status" role="status" aria-live="polite">Auto-sends after 5 seconds of silence. Say “Hi Dino” to speak again while voice is on.</p><div id="dino-controls" hidden><span id="dino-wake-status" role="status" aria-live="polite">Voice is on.</span><button id="dino-listen" type="button">Talk now</button><button id="dino-off" type="button">Turn voice off</button></div><p id="voice-note">Voice uses your browser’s speech service. Audio may be processed online.</p></div>
+      <div class="voice-help"><p id="voice-status" role="status" aria-live="polite">Auto-sends after 2 seconds of silence. Say “Hi Dino” to speak again while voice is on.</p><div id="dino-controls" hidden><span id="dino-wake-status" role="status" aria-live="polite">Voice is on.</span><button id="dino-listen" type="button">Talk now</button><button id="dino-off" type="button">Turn voice off</button></div><p id="voice-note">Voice uses your browser’s speech service. Audio may be processed online.</p></div>
       <footer><span id="privacy">Words stay in this moment. No saved conversation.</span><span id="lamp-page-controls" hidden><span id="lamp-page-status" role="status" aria-live="polite">USB lamp · disconnected</span><button id="lamp-page-action" type="button">Connect lamp</button></span><button id="open-research" type="button" aria-haspopup="dialog">Light study</button></footer>
     </div>
   </main>
@@ -63,7 +63,7 @@
     <p class="panel-intro">Explore a response, then shape its light. These are design hypotheses, waiting to be tested together.</p>
     <div class="panel-state"><span id="phase">idle</span><span id="source">demo</span><span id="paused-state"></span></div>
     <section class="panel-section">
-      <h3>01 <span>Response library</span> <small>20 studies</small></h3>
+      <h3>01 <span>Response library</span> <small>5 signals + 6 situations</small></h3>
       <div id="response-library" class="response-library"></div>
       <p id="response-description" class="panel-note"></p><p id="hypothesis" class="hypothesis"></p>
     </section>
@@ -76,6 +76,7 @@
           <label>Visible colors<input id="color-count" name="colorCount" type="number" min="1" max="4" value="3"></label>
           <label>Seed<input id="seed" name="seed" type="number" min="0" max="4294967295" value="1827"></label>
           <label>Motion<select id="primitive" name="motionPrimitive"></select></label>
+          <label>Expression<select id="expression" name="expression"></select></label>
           <label>Duration · seconds<input id="duration" name="durationMs" type="number" min="0.4" max="20" step="0.001" value="6"></label>
           <label>Flow speed <output id="speed-output">1.00</output><input id="speed" name="speed" type="range" min="0.05" max="2" step="0.01"></label>
           <label>Amplitude <output id="amplitude-output">0.40</output><input id="amplitude" name="amplitude" type="range" min="0" max="1" step="0.01"></label>

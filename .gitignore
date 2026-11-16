@@ -15,3 +15,8 @@ working-chat.png
 emotion-preview.png
 light-preview.png
 mixed-emotions-preview.png
+
+# Local research exports, document figures and deployment evidence
+/outputs/
+/deliverables/
+/railway-*.png

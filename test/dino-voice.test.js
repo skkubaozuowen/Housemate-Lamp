@@ -90,13 +90,13 @@ test('cumulative interim transcripts are replaced, removed and finalized without
   native.onresult(event([['Today is', true], ['wonderful', true]], 1)); assert.equal(voice.state.transcript, 'Today is wonderful');
 });
 
-test('actual microphone activity postpones the five-second quiet boundary and the text is submitted once', async t => {
+test('actual microphone activity postpones the two-second quiet boundary and the text is submitted once', async t => {
   const harness = await enabled(t), native = harness.current();
   native.onresult(event([['A happy day']]));
   harness.voice.handleLevel({level:.7, voiced:true, at:12});
-  await harness.clock.tick(4000);
+  await harness.clock.tick(1000);
   harness.voice.handleLevel({level:.4, voiced:true, at:123});
-  await harness.clock.tick(4999); assert.equal(harness.voice.state.phase, 'listening'); assert.equal(harness.submits.length, 0);
+  await harness.clock.tick(1999); assert.equal(harness.voice.state.phase, 'listening'); assert.equal(harness.submits.length, 0);
   await harness.clock.tick(1); assert.equal(harness.voice.state.phase, 'finishing'); assert.equal(native.stops, 1);
   native.onresult(event([['A very happy day', true]]));
   await harness.clock.tick(1200); assert.deepEqual(harness.submits, ['A very happy day']);
@@ -108,38 +108,40 @@ test('meter timestamps use a different clock safely and unvoiced noise does not 
   const harness = await enabled(t), native = harness.current();
   native.onresult(event([['Quietly spoken', true]]));
   harness.voice.handleLevel({level:.6, voiced:true, at:1700000000000});
-  await harness.clock.tick(4000);
-  harness.voice.handleLevel({level:.2, voiced:false, at:1700000004000});
-  await harness.clock.tick(1000); assert.equal(harness.voice.state.phase, 'finishing');
+  await harness.clock.tick(1000);
+  harness.voice.handleLevel({level:.2, voiced:false, at:1700000001000});
+  await harness.clock.tick(999); assert.equal(harness.voice.state.phase, 'listening'); assert.equal(harness.submits.length, 0);
+  await harness.clock.tick(1); assert.equal(harness.voice.state.phase, 'finishing');
   await harness.clock.tick(1200); assert.deepEqual(harness.submits, ['Quietly spoken']);
 });
 
 test('changed interim speech supplies activity fallback while final corrections do not reset quiet timing', async t => {
   const interim = await enabled(t), native = interim.current();
   native.onresult(event([['I feel']]));
-  await interim.clock.tick(4000); native.onresult(event([['I feel happy']]));
-  await interim.clock.tick(4999); assert.equal(interim.voice.state.phase, 'listening');
+  await interim.clock.tick(1000); native.onresult(event([['I feel happy']]));
+  await interim.clock.tick(1999); assert.equal(interim.voice.state.phase, 'listening'); assert.equal(interim.submits.length, 0);
   await interim.clock.tick(1); assert.equal(interim.voice.state.phase, 'finishing');
   const final = await enabled(t), finalNative = final.current();
   finalNative.onresult(event([['I feel']]));
   await final.clock.tick(1000); final.voice.handleLevel({level:.4, voiced:true});
-  await final.clock.tick(4000); finalNative.onresult(event([['I feel happy', true]]));
-  await final.clock.tick(999); assert.equal(final.voice.state.phase, 'listening');
+  await final.clock.tick(1000); finalNative.onresult(event([['I feel happy', true]]));
+  await final.clock.tick(999); assert.equal(final.voice.state.phase, 'listening'); assert.equal(final.submits.length, 0);
   await final.clock.tick(1); assert.equal(final.voice.state.phase, 'finishing');
 });
 
 test('a finalized correction beside an unchanged interim segment does not extend the silence deadline', async t => {
   const harness = await enabled(t), native = harness.current();
   native.onresult(event([['I think', true], ['today']]));
-  await harness.clock.tick(4000);
+  await harness.clock.tick(1000);
   native.onresult(event([['I believe', true], ['today']], 0));
-  await harness.clock.tick(1000); assert.equal(harness.voice.state.phase, 'finishing');
+  await harness.clock.tick(999); assert.equal(harness.voice.state.phase, 'listening'); assert.equal(harness.submits.length, 0);
+  await harness.clock.tick(1); assert.equal(harness.voice.state.phase, 'finishing');
   await harness.clock.tick(1200); assert.deepEqual(harness.submits, ['I believe today']);
 });
 
 test('a natural recognition end during finalization commits the latest text without waiting or duplicating', async t => {
   const harness = await enabled(t), native = harness.current();
-  native.onresult(event([['The draft']])); await harness.clock.tick(5000);
+  native.onresult(event([['The draft']])); await harness.clock.tick(2000);
   native.onresult(event([['The final words', true]])); native.onend(); await flush();
   assert.deepEqual(harness.submits, ['The final words']); assert.equal(harness.voice.state.phase, 'standby');
   await harness.clock.tick(5000); assert.equal(harness.submits.length, 1);

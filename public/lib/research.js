@@ -1,6 +1,6 @@
-import { CATALOG, RESPONSE_TYPES, MOTION_PRIMITIVES, createPlan } from './catalog.js';
-import { PALETTE_FAMILIES, PALETTE_VARIANTS, selectPalette } from './palettes.js';
-import { normalizePlan, normalizePreferences } from './planner.js';
+import { CATALOG, VISIBLE_RESPONSE_TYPES, EXPRESSIONS, MOTION_PRIMITIVES } from './catalog.js';
+import { PALETTE_FAMILIES, PALETTE_VARIANTS, selectPalette, paletteSettings, isSemanticMixedPalette, colorGroup } from './palettes.js';
+import { normalizePlan, normalizePreferences, createScenePlan } from './planner.js';
 const $ = id => document.getElementById(id);
 function option(value, label = value) { const el = document.createElement('option'); el.value = value; el.textContent = label; return el; }
 function download(name, data) {
@@ -13,7 +13,7 @@ export function setupResearch(controller, renderer, { aiAvailable = false, simul
   let selectedType = 'idle', draftPlan = controller.plan, draftTouched = false, renderedPlan, sceneCount = -1, lastMoment = controller.lastText;
   const notify = message => { $('panel-status').textContent = message; };
   const library = $('response-library');
-  for (const type of RESPONSE_TYPES) {
+  for (const type of VISIBLE_RESPONSE_TYPES) {
     const entry = CATALOG[type];
     const button = document.createElement('button'); button.type = 'button'; button.className = 'response-choice'; button.dataset.type = type;
     button.setAttribute('aria-pressed', 'false');
@@ -24,7 +24,7 @@ export function setupResearch(controller, renderer, { aiAvailable = false, simul
       selectedType = type;
       const seed = Number($('seed').value) || 0;
       draftTouched = true;
-      draftPlan = createPlan(type, { seed: $('fixed-seed').checked ? seed : Math.floor(Math.random() * 4294967296) });
+      draftPlan = createScenePlan(type, 'default', { seed: $('fixed-seed').checked ? seed : Math.floor(Math.random() * 4294967296) });
       writeControls(draftPlan);
       controller.preview(draftPlan);
     });
@@ -33,9 +33,14 @@ export function setupResearch(controller, renderer, { aiAvailable = false, simul
   for (const [id, family] of Object.entries(PALETTE_FAMILIES)) $('palette-family').append(option(id, family.label));
   for (const variant of PALETTE_VARIANTS) $('palette-variant').append(option(variant, variant[0].toUpperCase() + variant.slice(1)));
   for (const primitive of MOTION_PRIMITIVES) $('primitive').append(option(primitive, primitive.replaceAll('_', ' ')));
-  const fieldMap = { paletteFamily:'palette-family', paletteVariant:'palette-variant', colorCount:'color-count', seed:'seed', motionPrimitive:'primitive', durationMs:'duration', speed:'speed', amplitude:'amplitude', energy:'energy', transitionMs:'transition' };
+  const fieldMap = { paletteFamily:'palette-family', paletteVariant:'palette-variant', expression:'expression', colorCount:'color-count', seed:'seed', motionPrimitive:'primitive', durationMs:'duration', speed:'speed', amplitude:'amplitude', energy:'energy', transitionMs:'transition' };
   function writeControls(plan) {
-    for (const [key, id] of Object.entries(fieldMap)) $(id).value = ['durationMs', 'transitionMs'].includes(key) ? plan[key] / 1000 : plan[key];
+    const labels = { default:'Original expression', quiet:'Quiet recognition', renew:'Ready to try again', fulfilled:'Tired but fulfilled', tense:'Feeling tense', anticipation:'Looking forward', neutral:'No feeling specified', bittersweet:'Coexisting feelings' };
+    if (plan.responseType === 'setback') Object.assign(labels, { default:'Flowing waves · red & blue glows', renew:'Ready to try again · violet into warm gold' });
+    if (plan.responseType === 'upcoming') labels.default = 'A little courage · violet into a warm breath';
+    const expressions = EXPRESSIONS.filter(value => createScenePlan(plan.responseType, value).expression === value);
+    $('expression').replaceChildren(...expressions.map(value => option(value, labels[value])));
+    for (const [key, id] of Object.entries(fieldMap)) $(id).value = ['durationMs', 'transitionMs'].includes(key) ? plan[key] / 1000 : key === 'expression' && plan.responseType === 'upcoming' ? 'default' : plan[key];
     $('loop').checked = plan.loop;
     for (const key of ['energy','amplitude','speed']) $(`${key}-output`).value = Number(plan[key]).toFixed(2);
   }
@@ -43,26 +48,32 @@ export function setupResearch(controller, renderer, { aiAvailable = false, simul
     const plan = { ...draftPlan };
     plan.responseType = selectedType;
     for (const [key, id] of Object.entries(fieldMap)) {
-      plan[key] = ['paletteFamily','paletteVariant','motionPrimitive'].includes(key) ? $(id).value : Number($(id).value) * (['durationMs','transitionMs'].includes(key) ? 1000 : 1);
+      plan[key] = ['paletteFamily','paletteVariant','motionPrimitive','expression'].includes(key) ? $(id).value : Number($(id).value) * (['durationMs','transitionMs'].includes(key) ? 1000 : 1);
     }
     if (!$('fixed-seed').checked) plan.seed = Math.floor(Math.random() * 4294967296);
     plan.loop = $('loop').checked;
     return normalizePlan(plan);
   }
   form.addEventListener('input', () => { draftTouched = true; });
+  $('expression').addEventListener('change', () => {
+    draftTouched = true;
+    draftPlan = createScenePlan(selectedType, $('expression').value, { seed:Number($('seed').value) || 0 });
+    writeControls(draftPlan);
+    notify('Expression defaults loaded. Preview to play, or adjust the light first.');
+  });
   form.addEventListener('submit', e => { e.preventDefault(); draftTouched = true; draftPlan = readControls(); controller.preview(draftPlan); notify('Previewing this study.'); });
   // Edits update their numeric readout; only an explicit preview starts a scene.
   for (const key of ['energy','amplitude','speed']) $(key).addEventListener('input', () => { $(`${key}-output`).value = Number($(key).value).toFixed(2); });
   $('use-current').addEventListener('click', () => { draftTouched = true; draftPlan = controller.plan; selectedType = draftPlan.responseType; writeControls(draftPlan); controller.emit(); notify('Current light copied into the study controls.'); });
   $('stop-preview').addEventListener('click', () => { controller.stopPreview(); notify('Light held.'); });
-  $('restore-defaults').addEventListener('click', () => { controller.preferences = normalizePreferences({}); draftTouched = true; draftPlan = createPlan(selectedType, { seed: 1827 }); writeControls(draftPlan); controller.preview(draftPlan); notify('Default study restored; session preferences released.'); });
+  $('restore-defaults').addEventListener('click', () => { controller.preferences = normalizePreferences({}); draftTouched = true; draftPlan = createScenePlan(selectedType, 'default', { seed: 1827 }); writeControls(draftPlan); controller.preview(draftPlan); notify('Default study restored; session preferences released.'); });
   $('save-palette').addEventListener('click', () => {
     const p = readControls();
-    const tags = PALETTE_FAMILIES[p.paletteFamily].tags;
+    const tags = isSemanticMixedPalette(p) ? selectPalette(p, { ...controller.preferences, lockedPalette:null }).map(colorGroup) : PALETTE_FAMILIES[p.paletteFamily].tags;
     controller.preferences = normalizePreferences({ ...controller.preferences,
       avoidedColors:controller.preferences.avoidedColors.filter(color => !tags.includes(color)),
       rejectedPalettes:controller.preferences.rejectedPalettes.filter(family => family !== p.paletteFamily),
-      lockedPalette: { paletteFamily:p.paletteFamily, paletteVariant:p.paletteVariant, colorCount:p.colorCount } });
+      lockedPalette: paletteSettings(p) });
     draftTouched = true; draftPlan = p; controller.preview(p, { replacePalette:false }); notify('Palette kept. A new color request can replace it.');
   });
   $('release-palette').addEventListener('click', () => { controller.preferences = normalizePreferences({}); controller.emit(); notify('Color and movement preferences released.'); });
@@ -73,10 +84,10 @@ export function setupResearch(controller, renderer, { aiAvailable = false, simul
   $('simulate-error').addEventListener('click', () => { panel.close(); simulateFailure(); });
   $('save-scene').addEventListener('click', () => { controller.saveScene(); notify('Scene saved in this tab.'); });
   $('copy-plan').addEventListener('click', async () => {
-    try { await navigator.clipboard.writeText(JSON.stringify(controller.plan, null, 2)); notify('Plan copied. No conversation text included.'); }
+    try { await navigator.clipboard.writeText(JSON.stringify(controller.exportScene(), null, 2)); notify('Plan and rendered colors copied. No conversation text included.'); }
     catch { notify('Clipboard unavailable. Use Export plan instead.'); }
   });
-  $('export-plan').addEventListener('click', () => download('housemate-light-plan.json', controller.plan));
+  $('export-plan').addEventListener('click', () => download('housemate-light-plan.json', controller.exportScene()));
   $('export-feedback').addEventListener('click', () => download('housemate-workshop-notes.json', { version:1, notes:controller.feedback }));
   for (const button of document.querySelectorAll('[data-rating]')) button.addEventListener('click', () => {
     controller.recordFeedback(button.dataset.rating, $('workshop-note').value.trim()); $('workshop-note').value = ''; notify('Workshop note saved in this tab.');

@@ -17,13 +17,13 @@ export function extractWake(text) {
 /** One explicit, visible browser voice session. No audio is recorded or stored here. */
 export class DinoVoice {
   constructor({ recognitionFactory = null, meter = null, onState = () => {}, onSubmit = async () => {},
-    timers = globalThis, now = Date.now, silenceMs = 5000, finalizeMs = 1200, maxTurnMs = 60000, maxLength = 2000 } = {}) {
+    timers = globalThis, now = Date.now, silenceMs = 2000, finalizeMs = 1200, maxTurnMs = 60000, maxLength = 2000 } = {}) {
     Object.assign(this, { recognitionFactory, meter, onState, onSubmit, timers, now, silenceMs, finalizeMs, maxTurnMs, maxLength });
     this.generation = 0; this.turn = 0; this.recognition = null; this.retryCount = 0;
     this.jobs = new Set(); this.tickJob = null; this.finalJob = null; this.restartJob = null;
     this.destroyed = false; this.lastVoiceAt = null; this.turnStartedAt = null;
     this.state = { enabled:false, phase:'off', transcript:'', level:0, silenceRemaining:null,
-      language:'zh-CN', message:'Auto-sends after 5 seconds of silence. Say “Hi Dino” to speak again while voice is on.' };
+      language:'zh-CN', message:'Auto-sends after 2 seconds of silence. Say “Hi Dino” to speak again while voice is on.' };
     this.emit();
   }
   get supported() { return typeof this.recognitionFactory === 'function' && Boolean(this.meter) && this.meter.supported !== false; }
@@ -58,7 +58,7 @@ export class DinoVoice {
     if (!this.enabled || this.state.phase === 'starting' && !this.meter.active || this.state.phase === 'sending') return false;
     this.clearJobs(); this.detach(); this.turn++; this.retryCount = 0;
     this.lastVoiceAt = null; this.turnStartedAt = this.now();
-    this.emit({ phase:'listening', transcript:'', silenceRemaining:null, message:'Speak naturally. I’ll send after 5 seconds of quiet.' });
+    this.emit({ phase:'listening', transcript:'', silenceRemaining:null, message:'Speak naturally. I’ll send after 2 seconds of quiet.' });
     this.startRecognition(''); this.scheduleTick(); return true;
   }
   scheduleTick() {

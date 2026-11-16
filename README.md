@@ -18,11 +18,11 @@ npm test
 
 Checks use Node's built-in test runner. They cover semantic priority, schema validation, request cancellation and stale results, session reset, local fallback, RGB frames, paused/hidden time and the one-render-loop contract. Browser QA and its limits are recorded in [VALIDATION.md](VALIDATION.md).
 
-## Dino voice · version 2.5
+## Dino voice
 
-Choose **Chinese**, **Korean** or **English**, then explicitly click **Talk to Dino** and allow microphone access. Chinese (`zh-CN`) is the default; Korean uses `ko-KR` and English uses `en-US`. A compact, irregular blue-and-green glow flows in the existing light field while Dino receives a turn. Gentle ambient motion continues in quiet moments; measured microphone amplitude adds expansion and color strength through the Web Audio analyser. It is generated as the same **16 × 16 RGB frame** used by the webpage, matrix preview and connected USB lamp, without a separate CSS sphere. Reduced-motion fixes the geometry while retaining amplitude-related color changes. Text input and the existing 20 light responses remain available.
+Choose **Chinese**, **Korean** or **English**, then explicitly click **Talk to Dino** and allow microphone access. Chinese (`zh-CN`) is the default; Korean uses `ko-KR` and English uses `en-US`. A compact, irregular blue-and-green glow flows in the existing light field while Dino receives a turn. Gentle ambient motion continues in quiet moments; measured microphone amplitude adds expansion and color strength through the Web Audio analyser. It is generated as the same **16 × 16 RGB frame** used by the webpage, matrix preview and connected USB lamp, without a separate CSS sphere. Reduced-motion fixes the geometry while retaining amplitude-related color changes. Text input remains available alongside voice.
 
-After a turn contains words, **five seconds of silence automatically submits its text** to the existing light planner. Continued speech resets the silence countdown; recognition can take up to another 1.2 seconds to finish its last words. **Send now** submits sooner; **Cancel turn** cancels the turn; **Type instead** returns to typing. Existing typed text is preserved separately during voice entry and is never added to an automatically submitted voice turn. Each turn has a 2000-character limit and a one-minute capture limit. Voice mode is an explicit opt-in to this automatic submission behavior; the normal text-only **Share** action still works.
+After a turn contains words, **two seconds of silence automatically submits its text** to the existing light planner. Continued speech resets the silence countdown; recognition can take up to another 1.2 seconds to finish its last words. **Send now** submits sooner; **Cancel turn** cancels the turn; **Type instead** returns to typing. Existing typed text is preserved separately during voice entry and is never added to an automatically submitted voice turn. Each turn has a 2000-character limit and a one-minute capture limit. Voice mode is an explicit opt-in to this automatic submission behavior; the normal text-only **Share** action still works.
 
 After the light response, enabled voice mode waits for **“Hi Dino”** on the visible page. Say the English wake phrase, **wait for the blue halo, then speak in your selected language**. Standby recognition uses English so a Chinese recognizer does not mishear the wake phrase as “海底捞”; the new turn switches back to Chinese, Korean or English as selected. **Talk now** also starts a turn. This is page-scoped browser recognition while voice mode is on, not an operating-system or always-on wake-word service. Browser recognition may stop or become unavailable, so the visible status and Talk now control remain the recovery path. **Turn voice off**, hiding the page or leaving it releases the current microphone capture and stops recognition; returning to a hidden page does not silently enable listening again. Voice errors leave typing available, and stale audio/recognition callbacks cannot revive a cancelled turn.
 
@@ -38,7 +38,7 @@ For the USB-connected lamp on this Mac, start the local service with:
 npm run start:lamp
 ```
 
-Requires Python 3 (the Mac's `/usr/bin/python3` is used by default; `HOUSEMATE_PYTHON` can select another interpreter). Open **http://127.0.0.1:3000/** in the browser you will actually use and click **Connect lamp** below the input. The status must say **USB lamp · following this page**. If another page owns the lamp, explicitly choose **Use lamp here** to transfer control; the old token, stream and queued frames are invalidated. Opening a page, focusing it or typing does not silently claim the lamp. After a refresh, connect again. **Light controls** opens the study's Arduino section for calibration. The lamp follows the exact same 256-pixel RGB buffer as this page, at up to eight acknowledged frames per second. The 20 light responses and their palettes are unchanged. One-pixel RGB tests hold until **Sync with page**. Rotation, zigzag rows, mirror and low brightness can be adjusted in the drawer. Close other serial monitors before connecting.
+Requires Python 3 (the Mac's `/usr/bin/python3` is used by default; `HOUSEMATE_PYTHON` can select another interpreter). Open **http://127.0.0.1:3000/** in the browser you will actually use and click **Connect lamp** below the input. The status must say **USB lamp · following this page**. If another page owns the lamp, explicitly choose **Use lamp here** to transfer control; the old token, stream and queued frames are invalidated. Opening a page, focusing it or typing does not silently claim the lamp. After a refresh, connect again. **Light controls** opens the study's Arduino section for calibration. The lamp follows the exact same 256-pixel RGB buffer as this page, at up to eight acknowledged frames per second. One-pixel RGB tests hold until **Sync with page**. Rotation, zigzag rows, mirror and low brightness can be adjusted in the drawer. Close other serial monitors before connecting.
 
 The installed firmware targets Nano / ATmega328P with **Old Bootloader**, D6, 256 WS2812B pixels and a separate regulated 5 V supply with shared ground. Brightness is capped at **3 / 255** while the supply rating remains unverified. Physical gradients are coarse at this limit; matching screen appearance requires later calibration. Firmware, protocol, power guidance and upload commands are in [hardware/README.md](hardware/README.md). Original board flash is backed up locally under the ignored `.local-hardware/backups/` directory.
 
@@ -54,50 +54,45 @@ With no key, the page clearly labels **Local demo** and runs the same planner fo
 
 On AI failure the light plays a separate interrupted-return gesture, offers **Retry AI**, and continues with a valid local response. The study drawer includes a no-network failure simulation to exercise this exact presentation path. It is not a timed reminder service.
 
-## Response library
+## Response library · version 3.6
 
-All 20 responses can be previewed without AI. Each catalog entry includes a design hypothesis, not a claim of proven comprehension.
-
-Version 2.1 gives each response a more distinct path, composition and rhythm, with modestly stronger movement and shorter transitions. Everyday palettes use brighter chromatic pastels in place of muted gray mixtures. Celebrate keeps its original yellow/pink/peach palette, three expanding ripples and timing.
+The study drawer presents **five exchange signals and six everyday situations**. The same native light compositions are used by AI, local fallback, the matrix preview and USB output. The main layout and voice controls are unchanged.
 
 | ID | Internal name | Signature / ending |
 | --- | --- | --- |
-| B01 | idle | Slow edge wandering; stays available |
-| B02 | acknowledge | One local cloud blooms and lifts slightly; receipt without agreement |
-| B03 | processing | Two compact orbiting fields only while a real request is pending |
-| B04 | greet | One outward open arc; returns to idle |
-| B05 | affirm | Two sides join through a visible bridge; accepts a known choice |
-| B06 | decline | Two upright fields part like gates and settle |
-| B07 | clarify | Two offset regions alternate once; waits still |
-| B08 | wait | Two areas gather into one quiet central pool |
-| B09 | notify | Two local halos; ends |
-| B10 | complete | Three regions dock together below the center |
-| B11 | farewell | Slow retreat into the base; returns to idle |
-| B12 | error | Soft cloud curves outward, hesitates and returns; retry available |
-| R01 | empathize | Pause, then regions approach with a connecting stroke; holds |
-| R02 | accompany | Soft curved waves flow continuously like water; continues when invited |
-| R03 | soothe | Irregular angled flow settles into horizontal bands; holds |
-| R04 | encourage | Three connected rising steps; supports an upcoming action |
-| R05 | celebrate | Three controlled openings; brief, then idle |
-| R06 | receive_thanks | One small local circuit in the same palette; restores prior stable state |
-| R07 | withdraw | Edge motion decelerates to stillness; preserves color |
-| R08 | repair | Diagonal sweep replaces the field; remembers session feedback |
+| B01 | greet | Compact irregular blue-green opening; live voice expands with measured volume |
+| B02 | acknowledge | The listening/current glow gathers and pulses once, carrying its colors into processing |
+| B03 | processing | Two softly filled luminous balls split apart and orbit while a real request is pending, then unfold into the situation |
+| B04 | clarify | A soft glow probes sideways, hesitates, returns and tries another direction, then pauses for a continuation |
+| B05 | farewell | A gentle gathering gesture returning to ambient light |
+| S01 | celebrate | Good news, joy and positive anticipation share warm expansion fading into continuously drifting blue/violet/mint twinkles; quiet recognition unfolds more slowly |
+| S02 | setback | Violet/rose-red waves flow beneath differently sized red and blue glows that appear, drift and fade in staggered cycles; an expressed new attempt instead lets warm yellow enter, gradually take over, then leave softly twinkling gold/cream points |
+| S03 | rest | A broad cyan veil opens and lowers into a spacious resting field; fulfillment retains a small warm region |
+| S04 | upcoming | Nervousness or an expressed need for courage: a lightly wavering violet glow opens as peach/gold rises from within, then becomes a broad, steady warm breath |
+| S05 | mixed | Luminous colors gradually replace one another along the existing gradient direction; contextual compositions retain feeling regions, and layered compositions add sparse glimmers |
+| S06 | everyday | Three scattered warm pinpoints ripple once to mark receipt, then blend into two broad cream/apricot halos that separate, breathe and wander independently |
 
-A negative self-judgment routes to empathize, never agreement. General knowledge and unknowable future outcomes route to clarify rather than arbitrary yes/no. An explicit request for solitude takes priority over anxiety or other emotion words. Thanks after withdrawal returns to stillness. Returning or inviting company can start interaction again.
+Examples: “虽然一个人过生日，但我真的很开心” celebrates; “生日很开心，但也有点孤单” keeps joy and loneliness together in S05. Solitude alone does not prove sadness; a bare or contrasting story stays open to contextual interpretation. “我明天生日”, “明天去领毕业证”, and “I got the job and start tomorrow” share good news, so a future-time word does not move them into S04. “明天发表，好期待” is also S01; “明天发表，好紧张” is S04, offering courage without predicting the outcome; “明天发表” is ordinary S06 narration when no emotion is expressed. Everyday sharing means ordinary narration without a clear positive/negative feeling, fatigue, tension, complex feeling or request for support. “今天下雨了” fits S06; “我好倒霉，下雨了” expresses a setback and belongs to S02. Familiar weather/meal words alone do not establish that a story is neutral: unfamiliar accounts remain open to AI interpretation. “很难受” retains blue-violet tides, while “很难受，但想再试试” lets warm yellow gently enter the violet field, become a warm glow, then resolve into sparse gold/cream twinkles. S04 has a single expression choice in Light study; legacy expression names and palette families remain readable in saved plans. Native S01, S02, S04, S05 and S06 finish their introduction once, then retain their own moving ambient tail. Other finite responses hold their endpoint or return to ambient. Session boundaries, thanks, actual color corrections and legacy plan imports remain supported separately from the eleven previews.
+
+S05 supports `mixedMode: paired | layered | open`, with bounded `feelingPrimary`, `feelingSecondary`, `feelingTertiary` and `feelingBalance` fields. Paired compositions connect two contextual gradients across one soft diagonal field; layered compositions carry up to three feelings through flowing wavy ribbons. Open compositions follow the original D05 design's continuous diagonal gradient, using its actual blue, aqua, pink and lime palette when the person describes an overall complex feeling without clear labels. Colors now travel along that diagonal and gradually replace their neighbors, using a reflected sequence to avoid an abrupt last-to-first color jump. Contextual compositions instead carry a traveling color ripple within their allocated feeling regions. Flow speed and amplitude control this motion, including the continuing tail; zero amplitude and reduced motion remain still. Open mode's legacy feeling fields are inert defaults, not an assertion that the person feels joy or sadness. Visual emphasis 0.5 gives comparable color presence; larger values give the first color region greater presence. It is a prototype composition choice, not a measurement of the person's feelings. Warm-only, cool-only and warm/cool pairings are available. Explicit color requests, kept palettes and declined hues still take precedence. Saved scenes and exports retain the full mode, color construction and rendered RGB values.
+
+The trigger follows the account's meaning rather than counting emotional keywords. “生日开心，可没人一起庆祝，还是有些失落”, “终于毕业，开心又舍不得”, and an explicitly complex or hard-to-name emotional account can enter S05. Typical anticipation with nervousness stays in S04; fatigue with fulfilment stays in S03; a setback with willingness to try again stays in S02. Explicit happiness while alone stays in S01. The default Light study S05 preview uses the open, balanced composition.
+
+Exchange transitions reuse the current colors and moving geometry: listening → receipt → pending processing → situation. The processing light appears only while a real request is outstanding; fast or local responses can proceed directly from receipt to the situation. A new voice turn blends the existing field into the measured-volume listening glow.
 
 ## Light study / workshop
 
 The drawer is closed by default. It provides:
 
-- Twenty direct previews, replay and hold; design hypothesis for each response.
-- Eleven mixed palette families, seven single-hue palettes for explicit color requests and an achromatic fallback, each with misted / balanced / accented variations, one to four visible tones and a reproducible seed.
-- Primitive, flow speed, amplitude, energy, duration, loop and color transition controls.
+- Eleven direct previews, replay and hold; expression variants for contextual differences.
+- Luminous mixed palettes, seven single-hue palettes for explicit color requests and an achromatic fallback, with misted / balanced / accented variations, one to four visible tones and a reproducible seed.
+- Expression, primitive, flow speed, amplitude, energy, duration, loop and color transition controls.
 - Diffusion / crisp matrix view. Both consume the same **768-byte RGB frame**; the matrix is not a downsampled screenshot.
-- Palette lock and release; session scenes with restore; current plan copy/export.
+- Palette lock and release; session scenes with restore; plan copy/export including the actual main and optional accent colors.
 - Session-only likes, dislikes and suggested changes, exported only when requested. Exports include settings and intentionally entered workshop notes; conversation text is never automatically attached.
 - AI/demo selection and simulated request failure.
 
-Color corrections run locally in both AI and demo mode. “不要这个颜色” / “I don't like this color” / “이 색 말고” release the old palette lock and select a visibly different allowed palette. Rejected palettes are skipped in subsequent choices. Direct requests such as “换成粉色” / “make it blue” change only the current moment; they replace an old lock or conflicting old dislike without creating a new lock. The color remains while that moment settles, or while saying thanks or adjusting movement. A new emotional response starts its own catalog theme: “想要蓝色” then “我很开心” returns to the yellow/pink celebration theme. Only “保持这个颜色” / “keep this color” or the study's **Keep this palette** button keeps a palette across new emotions. “不要蓝色改成粉色，慢一点” applies the ban, requested pink and motion change together. Named color requests currently support blue, pink, purple, green, orange, red and yellow; this is not unrestricted RGB or multi-emotion color mixing.
+Color corrections run locally in both AI and demo mode. “不要这个颜色” / “I don't like this color” / “이 색 말고” release the old palette lock and select a visibly different allowed palette. Rejected palettes are skipped in subsequent choices. Direct requests such as “换成粉色” / “make it blue” change only the current moment; they replace an old lock or conflicting old dislike without creating a new lock. The color remains while that moment settles, or while saying thanks or adjusting movement. A new emotional response starts its own catalog theme: “想要蓝色” then “我很开心” returns to the celebration theme. Only “保持这个颜色” / “keep this color” or the study's **Keep this palette** button keeps a palette across new emotions. “不要蓝色改成粉色，慢一点” applies the ban, requested pink and motion change together. Celebration stars are filtered hue by hue: declining blue can retain violet and mint. Named or explicitly kept palettes receive no extra hues. Pause, Hold light, reduced motion, boundaries and new input can stop or replace an ambient tail.
 
 Manual study previews also replace conflicting old color preferences so the selected palette is actually shown. Keeping a palette and restoring a saved scene retain the intended session preferences. If every chromatic hue is declined, a real gray palette keeps exported plans reproducible; a further rejection with no permitted alternative asks for clarification.
 
@@ -107,7 +102,7 @@ Motion feedback affects later plans. A short thanks preserves color. New moment 
 
 | File | Responsibility |
 | --- | --- |
-| `public/lib/catalog.js` | 20 response defaults, timing, closure, design notes |
+| `public/lib/catalog.js` | Five exchange signals, six situations, legacy defaults, timing and closure |
 | `public/lib/palettes.js` | Palette families, variants, hue exclusions, selection |
 | `public/lib/planner.js` | Shared plan schema, normalization, multilingual local routing, preferences |
 | `response-api.js` | OpenAI instructions, request, safe fallback |
@@ -118,7 +113,7 @@ Motion feedback affects later plans. A short thanks preserves color. New moment 
 | `server.js` | Static asset allowlist and plan/config API |
 | `public/lib/hardware.js` | Explicit local USB session, latest-frame streaming and lamp controls |
 | `public/lib/speech.js` | Browser recognition adapter, draft insertion and cancellation |
-| `public/lib/dino-voice.js` | Opt-in Dino turns, five-second silence submission, page-scoped wake listening and voice UI |
+| `public/lib/dino-voice.js` | Opt-in Dino turns, two-second silence submission, page-scoped wake listening and voice UI |
 | `public/lib/voice-audio.js` | Temporary microphone stream, real amplitude measurement and capture cleanup |
 | `lamp-bridge.js` | Loopback-only lamp API, mapping, CRC packets, ACK flow control and browser lease |
 | `hardware/serial_transport.py` | Exclusive POSIX serial I/O using Python standard library |
