@@ -54,7 +54,7 @@ With no key, the page clearly labels **Local demo** and runs the same planner fo
 
 On AI failure the light plays a separate interrupted-return gesture, offers **Retry AI**, and continues with a valid local response. The study drawer includes a no-network failure simulation to exercise this exact presentation path. It is not a timed reminder service.
 
-## Response library · version 3.6
+## Response library · version 3.9
 
 The study drawer presents **five exchange signals and six everyday situations**. The same native light compositions are used by AI, local fallback, the matrix preview and USB output. The main layout and voice controls are unchanged.
 
@@ -91,6 +91,16 @@ The drawer is closed by default. It provides:
 - Palette lock and release; session scenes with restore; plan copy/export including the actual main and optional accent colors.
 - Session-only likes, dislikes and suggested changes, exported only when requested. Exports include settings and intentionally entered workshop notes; conversation text is never automatically attached.
 - AI/demo selection and simulated request failure.
+
+## Contextual orchestration · version 3.9
+
+The six situation families and their eleven contextual expressions now provide a visual vocabulary that the LLM can orchestrate for a particular utterance. The model's bounded speed, chromatic energy, movement amplitude, duration and transition values reach the renderer, together with a `composition` object: field size, spread, elongation, wave width/count, ripple count, spot count, accent size/presence, appearance spacing and support entry/strength. Only parameters meaningful to the chosen expression affect it. `stagger` controls spacing inside an animation; `transitionMs` remains the handoff between responses. The model may also choose an existing misted, balanced or accented palette variation; the family and basic color budget continue to come from the situation framework.
+
+S01 ranges from quiet recognition to expansive celebration. S02 may retain the violet/red/blue waves or introduce warm support after acknowledgment, based on the account, its expressed intensity and the kind of response sought; saying “try again” is one route rather than a required password. An explicit request for listening or rejection of comfort retains the receiving expression. S03 keeps its fatigue/fulfilment distinction; S04 keeps its rising warm breath; S05 keeps open, paired and three-strand compositions; S06 keeps local opening ripples followed by two breathing, wandering lights. These variants are selected within the conversation, not offered as required choices to the person speaking.
+
+The existing **Light study → Color & movement → Composition details** disclosure exposes relevant parameters for inspection and replay, including all three S05 modes. Use current light captures the actual AI settings. Save, restore and JSON exports retain the full composition, selected colors and timing. Default library previews and Local demo remain the original reference compositions; open-ended parameter interpretation requires AI mode. Earlier saved plans without a composition object acquire the original defaults.
+
+The planner interprets recognized words and conversation context, not microphone prosody. Listening's microphone-volume response is a separate local rendering layer. Energy adjusts colored-light presence in the existing diffusion model; it does not raise the physical lamp's current/brightness limit. The voice wake phrase, two-second silence submission and shared 768-byte RGB output remain in use.
 
 Color corrections run locally in both AI and demo mode. “不要这个颜色” / “I don't like this color” / “이 색 말고” release the old palette lock and select a visibly different allowed palette. Rejected palettes are skipped in subsequent choices. Direct requests such as “换成粉色” / “make it blue” change only the current moment; they replace an old lock or conflicting old dislike without creating a new lock. The color remains while that moment settles, or while saying thanks or adjusting movement. A new emotional response starts its own catalog theme: “想要蓝色” then “我很开心” returns to the celebration theme. Only “保持这个颜色” / “keep this color” or the study's **Keep this palette** button keeps a palette across new emotions. “不要蓝色改成粉色，慢一点” applies the ban, requested pink and motion change together. Celebration stars are filtered hue by hue: declining blue can retain violet and mint. Named or explicitly kept palettes receive no extra hues. Pause, Hold light, reduced motion, boundaries and new input can stop or replace an ambient tail.
 

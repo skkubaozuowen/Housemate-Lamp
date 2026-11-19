@@ -83,6 +83,19 @@
           <label>Energy <output id="energy-output">0.30</output><input id="energy" name="energy" type="range" min="0" max="1" step="0.01"></label>
           <label>Transition · seconds<input id="transition" name="transitionMs" type="number" min="0.15" max="5" step="0.001" value="1.8"></label>
         </div>
+        <details id="composition-details">
+          <summary>Composition details</summary>
+          <p class="panel-note">Use current light to inspect a response. Adjust its proportions and timing, then preview.</p>
+          <div id="composition-controls" class="control-grid"></div>
+          <div id="mixed-controls" class="control-grid" hidden>
+            <label>Feeling composition<select id="mixed-mode"><option value="open">Hard to name</option><option value="paired">Two interwoven feelings</option><option value="layered">Three interwoven feelings</option></select></label>
+            <label data-mixed-specific>First feeling<select id="feeling-primary"></select></label>
+            <label data-mixed-specific>Second feeling<select id="feeling-secondary"></select></label>
+            <label id="tertiary-control" data-mixed-specific>Third feeling<select id="feeling-tertiary"></select></label>
+            <label data-mixed-specific>First feeling emphasis <output id="feeling-balance-output">0.50</output><input id="feeling-balance" type="range" min="0.5" max="0.9" step="0.01" value="0.5"></label>
+          </div>
+          <p id="composition-note" class="panel-note"></p>
+        </details>
         <div class="checks"><label><input type="checkbox" id="loop" name="loop"> Loop</label><label><input type="checkbox" id="fixed-seed" checked> Keep seed fixed</label></div>
         <div class="button-row"><button type="submit" class="primary">Preview / replay</button><button id="use-current" type="button">Use current light</button><button id="stop-preview" type="button">Hold light</button><button id="restore-defaults" type="button">Restore defaults</button></div>
       </form>

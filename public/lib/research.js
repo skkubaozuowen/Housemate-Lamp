@@ -1,6 +1,7 @@
 import { CATALOG, VISIBLE_RESPONSE_TYPES, EXPRESSIONS, MOTION_PRIMITIVES } from './catalog.js';
 import { PALETTE_FAMILIES, PALETTE_VARIANTS, selectPalette, paletteSettings, isSemanticMixedPalette, colorGroup } from './palettes.js';
-import { normalizePlan, normalizePreferences, createScenePlan } from './planner.js';
+import { normalizePlan, normalizePreferences, createScenePlan, FEELING_TYPES, SCENE_TYPES } from './planner.js';
+import { COMPOSITION_DEFAULTS, COMPOSITION_LIMITS, COMPOSITION_INTEGER_FIELDS, normalizeComposition } from './composition.js';
 const $ = id => document.getElementById(id);
 function option(value, label = value) { const el = document.createElement('option'); el.value = value; el.textContent = label; return el; }
 function download(name, data) {
@@ -33,24 +34,82 @@ export function setupResearch(controller, renderer, { aiAvailable = false, simul
   for (const [id, family] of Object.entries(PALETTE_FAMILIES)) $('palette-family').append(option(id, family.label));
   for (const variant of PALETTE_VARIANTS) $('palette-variant').append(option(variant, variant[0].toUpperCase() + variant.slice(1)));
   for (const primitive of MOTION_PRIMITIVES) $('primitive').append(option(primitive, primitive.replaceAll('_', ' ')));
+  const compositionLabels = { fieldScale:'Light field size', spread:'Spatial spread', waveWidth:'Wave / ripple thickness', waveCount:'Wave count', rippleCount:'Opening ripple count', spotCount:'Red / blue glow count', accentScale:'Accent glow size', accentWeight:'Accent presence', stagger:'Time between appearances', supportDelay:'Warmth entry point', supportStrength:'Warmth presence', elongation:'Shape elongation' };
+  const compositionFields = Object.keys(COMPOSITION_DEFAULTS);
+  const compositionByScene = {
+    celebrate:['fieldScale','spread','waveWidth','rippleCount','accentScale','accentWeight','stagger','elongation'],
+    setback:['fieldScale','spread','waveWidth','waveCount','spotCount','accentScale','accentWeight','stagger','supportDelay','supportStrength','elongation'],
+    rest:['fieldScale','spread','waveWidth','accentScale','accentWeight','supportDelay','supportStrength','elongation'],
+    upcoming:['fieldScale','spread','accentScale','accentWeight','supportDelay','supportStrength','elongation'],
+    mixed:['fieldScale','spread','waveWidth','accentScale','accentWeight','stagger','elongation'],
+    everyday:['fieldScale','spread','waveWidth','rippleCount','stagger','elongation']
+  };
+  for (const key of compositionFields) {
+    const label = document.createElement('label'); label.dataset.compositionField = key;
+    label.append(document.createTextNode(compositionLabels[key]));
+    const input = document.createElement('input'); input.id = `composition-${key}`;
+    input.type = 'number'; input.min = COMPOSITION_LIMITS[key][0]; input.max = COMPOSITION_LIMITS[key][1];
+    input.step = COMPOSITION_INTEGER_FIELDS.includes(key) ? 1 : .01;
+    input.value = COMPOSITION_DEFAULTS[key]; label.append(input); $('composition-controls').append(label);
+  }
+  for (const key of ['primary','secondary','tertiary']) for (const feeling of FEELING_TYPES) $(`feeling-${key}`).append(option(feeling, feeling[0].toUpperCase()+feeling.slice(1)));
+  function compositionVisibility() {
+    const expression = $('expression').value, mode = $('mixed-mode').value;
+    let visible = compositionByScene[selectedType] || [];
+    if (selectedType === 'celebrate' && expression === 'quiet') visible = ['fieldScale','spread','elongation'];
+    if (selectedType === 'setback') visible = visible.filter(key => expression === 'renew' ? !['spotCount','stagger'].includes(key) : !['supportDelay','supportStrength'].includes(key));
+    if (selectedType === 'rest' && expression !== 'fulfilled') visible = visible.filter(key => !['accentScale','accentWeight','supportDelay','supportStrength'].includes(key));
+    if (selectedType === 'mixed' && mode !== 'layered') visible = visible.filter(key => !['accentScale','accentWeight','stagger'].includes(key));
+    for (const key of compositionFields) $(`composition-${key}`).parentElement.hidden = !visible.includes(key);
+  }
+  function mixedVisibility() {
+    const open = $('mixed-mode').value === 'open';
+    for (const label of $('mixed-controls').querySelectorAll('[data-mixed-specific]')) label.hidden = open;
+    $('tertiary-control').hidden = open || $('mixed-mode').value !== 'layered';
+    compositionVisibility();
+  }
+  $('mixed-mode').addEventListener('change', mixedVisibility);
+  $('feeling-balance').addEventListener('input', () => { $('feeling-balance-output').value = Number($('feeling-balance').value).toFixed(2); });
   const fieldMap = { paletteFamily:'palette-family', paletteVariant:'palette-variant', expression:'expression', colorCount:'color-count', seed:'seed', motionPrimitive:'primitive', durationMs:'duration', speed:'speed', amplitude:'amplitude', energy:'energy', transitionMs:'transition' };
   function writeControls(plan) {
-    const labels = { default:'Original expression', quiet:'Quiet recognition', renew:'Ready to try again', fulfilled:'Tired but fulfilled', tense:'Feeling tense', anticipation:'Looking forward', neutral:'No feeling specified', bittersweet:'Coexisting feelings' };
-    if (plan.responseType === 'setback') Object.assign(labels, { default:'Flowing waves · red & blue glows', renew:'Ready to try again · violet into warm gold' });
+    const labels = { default:'Original expression', quiet:'Quiet recognition', renew:'Acknowledgment into support', fulfilled:'Tired but fulfilled', tense:'Feeling tense', anticipation:'Looking forward', neutral:'No feeling specified', bittersweet:'Coexisting feelings' };
+    if (plan.responseType === 'setback') Object.assign(labels, { default:'Flowing waves · red & blue glows', renew:'Acknowledgment into support · violet into warm gold' });
     if (plan.responseType === 'upcoming') labels.default = 'A little courage · violet into a warm breath';
     const expressions = EXPRESSIONS.filter(value => createScenePlan(plan.responseType, value).expression === value);
     $('expression').replaceChildren(...expressions.map(value => option(value, labels[value])));
     for (const [key, id] of Object.entries(fieldMap)) $(id).value = ['durationMs', 'transitionMs'].includes(key) ? plan[key] / 1000 : key === 'expression' && plan.responseType === 'upcoming' ? 'default' : plan[key];
     $('loop').checked = plan.loop;
     for (const key of ['energy','amplitude','speed']) $(`${key}-output`).value = Number(plan[key]).toFixed(2);
+    const composition = normalizeComposition(plan.composition);
+    for (const key of compositionFields) {
+      $(`composition-${key}`).value = composition[key];
+    }
+    $('composition-details').hidden = !SCENE_TYPES.includes(plan.responseType);
+    $('mixed-controls').hidden = plan.responseType !== 'mixed';
+    $('mixed-mode').value = plan.mixedMode;
+    $('feeling-primary').value = plan.feelingPrimary;
+    $('feeling-secondary').value = plan.feelingSecondary === 'none' ? 'sadness' : plan.feelingSecondary;
+    $('feeling-tertiary').value = plan.feelingTertiary === 'none' ? FEELING_TYPES.find(feeling => ![plan.feelingPrimary,plan.feelingSecondary].includes(feeling)) : plan.feelingTertiary;
+    $('feeling-balance').value = plan.feelingBalance;
+    $('feeling-balance-output').value = Number(plan.feelingBalance).toFixed(2);
+    mixedVisibility();
+    $('composition-note').textContent = plan.responseType === 'setback'
+      ? 'Waves and colored glows can vary within this response. Warmth entry applies to the support expression.'
+      : 'The response keeps its own movement language. Appearance spacing is separate from the transition between responses.';
   }
   function readControls() {
-    const plan = { ...draftPlan };
+    const plan = structuredClone(draftPlan);
     plan.responseType = selectedType;
     for (const [key, id] of Object.entries(fieldMap)) {
       plan[key] = ['paletteFamily','paletteVariant','motionPrimitive','expression'].includes(key) ? $(id).value : Number($(id).value) * (['durationMs','transitionMs'].includes(key) ? 1000 : 1);
     }
     if (!$('fixed-seed').checked) plan.seed = Math.floor(Math.random() * 4294967296);
+    plan.composition = normalizeComposition(Object.fromEntries(compositionFields.map(key => [key, Number($(`composition-${key}`).value)])));
+    if (plan.responseType === 'mixed') {
+      Object.assign(plan, { mixedMode:$('mixed-mode').value, feelingPrimary:$('feeling-primary').value,
+        feelingSecondary:$('feeling-secondary').value, feelingTertiary:$('mixed-mode').value === 'layered' ? $('feeling-tertiary').value : 'none',
+        feelingBalance:Number($('feeling-balance').value) });
+    }
     plan.loop = $('loop').checked;
     return normalizePlan(plan);
   }

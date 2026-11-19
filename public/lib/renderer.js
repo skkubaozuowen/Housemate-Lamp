@@ -1,5 +1,6 @@
 import {CATALOG, MOTION_PRIMITIVES, hasAmbientTail} from './catalog.js';
 import {selectPalette,colorGroup} from './palettes.js';
+import {normalizeComposition} from './composition.js';
 
 export const LED_SIZE = 16;
 const TAU = Math.PI * 2;
@@ -9,6 +10,30 @@ const ease = value => { const p=clamp(value); return p*p*(3-2*p); };
 const mix = (a,b,p) => a+(b-a)*p;
 const pulse = (p,center,width) => Math.exp(-(((p-center)/width)**2));
 const phaseFor = seed => ((Math.imul((seed>>>0)^0x9e3779b9,1664525)>>>0)/4294967296)*TAU;
+
+// Overall scale changes stay inside the scene's existing soft geometry. This
+// only runs on native everyday scenes; basic signals and manual primitives keep
+// their original controls and every default multiplication is skipped.
+function adaptSceneGeometry(scene,composition) {
+  const {fieldScale,spread,elongation}=composition;
+  for(const shape of scene) {
+    if(fieldScale!==1) {
+      if(shape.rx!==undefined){shape.rx*=fieldScale;shape.ry*=fieldScale;}
+      if(shape.kind==='mixedGradient'&&shape.mode==='layered')shape.weaveScale*=fieldScale;
+      if(shape.radius!==undefined)shape.radius*=fieldScale;
+      if(shape.width!==undefined)shape.width*=fieldScale;
+    }
+    if(spread!==1) {
+      if(shape.x!==undefined&&shape.kind!=='wave')shape.x=.5+(shape.x-.5)*spread;
+      if(shape.y!==undefined)shape.y=.5+(shape.y-.5)*spread;
+      if(shape.kind==='mixedGradient'){shape.rx*=spread;shape.ry*=spread;if(shape.mode==='layered')shape.weaveScale*=spread;}
+    }
+    if(elongation!==1&&shape.rx!==undefined){
+      shape.rx*=elongation;shape.ry/=Math.sqrt(elongation);
+      if(shape.kind==='mixedGradient'&&shape.mode==='layered')shape.weaveScale*=elongation;
+    }
+  }
+}
 const gaussian = (x,y,shape) => {
   if(typeof shape.angle==='number') {
     const dx=x-shape.x,dy=y-shape.y,cos=Math.cos(shape.angle),sin=Math.sin(shape.angle);
@@ -43,6 +68,28 @@ function gradientColor(palette,position,balance,avoidedSegments=[],{travel=0,rip
   const peak=Math.max(...color);
   const achromatic=a.every(channel=>channel===a[0])&&b.every(channel=>channel===b[0]);
   return peak&&!achromatic ? color.map(channel=>channel/peak*255) : color;
+}
+
+
+// Allowed pigments can mix into a declined intermediate hue. Fade that contact
+// smoothly through the existing white light surface instead of introducing a
+// gray seam, snapping to another hue, or painting a hard white pixel mask.
+const HUE_SPANS = {red:[345,375],orange:[15,45],yellow:[45,75],green:[75,170],blue:[170,255],purple:[255,290],pink:[290,345]};
+function respectDeclinedHues(rgb,avoidedColors) {
+  const high=Math.max(...rgb),low=Math.min(...rgb),chroma=high-low;
+  if(chroma<=12)return rgb;
+  const [r,g,b]=rgb;
+  let hue=(high===r?((g-b)/chroma)%6:high===g?(b-r)/chroma+2:(r-g)/chroma+4)*60;
+  hue=(hue+360)%360;
+  let distance=Infinity;
+  for(const group of avoidedColors) {
+    const span=HUE_SPANS[group];
+    if(!span)continue;
+    for(const value of [hue-360,hue,hue+360])distance=Math.min(distance,value<span[0]?span[0]-value:value>span[1]?value-span[1]:0);
+  }
+  if(distance>=12)return rgb;
+  const shoulder=1-ease(distance/12),keep=1-shoulder*(1-12/chroma);
+  return rgb.map(channel=>mix(255,channel,keep));
 }
 
 function restingFields(scene,phase=0,amplitude=.25,strength=.85) {
@@ -217,8 +264,9 @@ function processingAnchors(clock,phase,amp) {
   return [0,1].map(i=>({x:.5+Math.cos(angle+i*Math.PI)*orbit,y:.49+Math.sin(angle+i*Math.PI)*orbit}));
 }
 
-function responseScene({type,expression,p,clock,phase,amp,energy,speed,loop,accentIndices,primaryCount,feelingBalance,mixedMode}) {
+function responseScene({type,expression,p,clock,phase,amp,energy,speed,loop,accentIndices,primaryCount,feelingBalance,mixedMode,composition}) {
   const scene=[],base=.58+energy*.92,open=ease(p),finiteMotion=Math.sin(Math.PI*p)**2;
+  const c=composition;
   switch(type) {
     case 'greet': {
       const emerge=ease(p/.38),breathe=Math.sin(clock*1.9+phase)*amp*.018*finiteMotion;
@@ -281,9 +329,13 @@ function responseScene({type,expression,p,clock,phase,amp,energy,speed,loop,acce
         addField(scene,.48,.54,.09+spread*.48,.11+spread*.49,0,base*.78*life);
         addField(scene,.58,.47,.12+spread*.34,.13+spread*.35,1,base*.55*spread*life);
         addField(scene,.4,.61,.12+spread*.36,.14+spread*.32,2,base*.46*spread*life);
-        for(let i=0;i<3;i++) {
-          const q=(p-[.025,.16,.46][i])/[.55,.58,.35][i];
-          if(q>=0&&q<=1)addRing(scene,.46+i*.028,.55-i*.035,.025+ease(q)*(.55+amp*.2),.075+i*.014,i,base*.9*Math.sin(Math.PI*q));
+        for(let i=0;i<c.rippleCount;i++) {
+          const start=c.rippleCount===3?[.025,.16,.46][i]:.025+i*.435/Math.max(1,c.rippleCount-1);
+          const entrance=.025+(start-.025)*c.stagger;
+          const width=Math.min(c.rippleCount===3?[.55,.58,.35][i]:.55-i*.2/Math.max(1,c.rippleCount-1),.84-entrance);
+          const q=(p-entrance)/width;
+          if(q>=0&&q<=1)addRing(scene,.46+i*.028,.55-i*.035,(.025+ease(q)*(.55+amp*.2))*c.spread,
+            (.075+i*.014)*c.waveWidth,i%3,base*.9*Math.sin(Math.PI*q));
         }
         // The expansion ends once. Independent pinpoint glimmers continue on
         // their own clocks; they never restart the warm opening or leave a wash.
@@ -300,49 +352,56 @@ function responseScene({type,expression,p,clock,phase,amp,energy,speed,loop,acce
           const glimmer=(.5+.5*Math.sin(clock*(1.2+i*.13)+phase+i*2.41))**3;
           const x=anchors[i][0]+Math.sin(travel)*amp*.075;
           const y=anchors[i][1]+Math.cos(travel*.79+i)*amp*.065;
-          const radius=.042+amp*(.009+.009*Math.sin(travel*.61+i));
-          addField(scene,x,y,radius,radius*(1.1+.1*Math.cos(travel)*amp),accents[slot],base*(.2+1.85*(.38+amp*(glimmer-.38)))*reveal);
+          const radius=(.042+amp*(.009+.009*Math.sin(travel*.61+i)))*c.accentScale;
+          addField(scene,x,y,radius,radius*(1.1+.1*Math.cos(travel)*amp),accents[slot],base*(.2+1.85*(.38+amp*(glimmer-.38)))*reveal*c.accentWeight);
         }
       }
       return scene;
     }
     case 'setback': {
       const flow=clock*amp*1.35,bend=.065+amp*.07,fold=Math.sin(clock*.55+phase)*amp*.045;
-      const renewal=expression==='renew',coolLife=renewal?1-ease((p-.48)/.4):1;
+      const renewal=expression==='renew',coolStart=.48+(c.supportDelay-.28);
+      const coolLife=renewal?1-ease((p-coolStart)/Math.min(.4,1-coolStart)):1;
       const spots=renewal?0:ease((p-.34)/.22),waveLife=coolLife*(1-spots*.2);
-      addWave(scene,.3+fold,.145,bend,phase,flow,0,base*.94*waveLife);
-      addWave(scene,.7-fold,.16,bend*.85,phase+1.9,flow+.9,1,base*.9*waveLife);
+      for(let i=0;i<c.waveCount;i++) {
+        const y=c.waveCount===2?[.3,.7][i]:c.waveCount===1?.5:.17+i*.66/(c.waveCount-1);
+        const direction=i%2===0?1:-1,color=i%2;
+        addWave(scene,y+fold*direction,(i%2===0?.145:.16)*c.waveWidth,bend*(i%2===0?1:.85),
+          phase+i*1.9,flow+i*.9,color,base*(i%2===0?.94:.9)*waveLife*(color===1?c.accentWeight:1));
+      }
       addField(scene,.12,.61,.35,.28,0,base*.2*coolLife);
       if(!renewal) {
         // Diffused spots surface within the tide, bloom and disappear on
         // staggered clocks. A cycle changes position and size only while its
         // spot is invisible; the surrounding waves keep flowing throughout.
         const t=clock*(amp/.78);
-        const anchors=[[.52,.39,.17,1],[.24,.68,.15,2],[.77,.27,.085,1],[.7,.65,.19,2],[.47,.78,.095,1]];
-        for(const [i,[sx,sy,radius,color]] of anchors.entries()) {
-          const cycle=t/(1.5+i*.13)+phase/TAU+i*.287,round=Math.floor(cycle),q=cycle-round;
+        const anchors=[[.52,.39,.17,1],[.24,.68,.15,2],[.77,.27,.085,1],[.7,.65,.19,2],[.47,.78,.095,1],[.19,.35,.12,1],[.86,.79,.13,2]];
+        for(const [i,[sx,sy,radius,color]] of anchors.slice(0,c.spotCount).entries()) {
+          const cycle=t/((1.5+i*.13)*c.stagger)+phase/TAU+i*.287,round=Math.floor(cycle),q=cycle-round;
           const bloom=Math.sin(Math.PI*clamp(q/.8))**2;
           const variation=phase+i*2.3+round*2.399;
           const x=sx+Math.sin(variation)*amp*.08+Math.sin(t*.63+i)*amp*.025;
           const y=sy+Math.cos(variation*.87)*amp*.07+Math.cos(t*.57+i)*amp*.025;
-          const size=radius*(.9+.15*Math.sin(variation))*(.78+.22*bloom);
-          addField(scene,x,y,size,size*(1.08+.09*Math.cos(variation)),color,base*2.1*bloom*spots);
-          addField(scene,x,y,size*1.65,size*1.75,color,base*.17*bloom*spots);
+          const size=radius*(.9+.15*Math.sin(variation))*(.78+.22*bloom)*c.accentScale;
+          addField(scene,x,y,size,size*(1.08+.09*Math.cos(variation)),color,base*2.1*bloom*spots*c.accentWeight);
+          addField(scene,x,y,size*1.65,size*1.75,color,base*.17*bloom*spots*c.accentWeight);
         }
       }
       if(expression==='renew') {
         // Gold gently enters the violet tide from the side, opens into warmth,
         // then leaves a quiet constellation. The opening never restarts.
-        const warmth=ease((p-.28)/.36),stars=ease((p-.76)/.22),resident=1-stars*.88;
+        const warmth=ease((p-c.supportDelay)/.36),starStart=Math.max(.76,c.supportDelay+.36);
+        const stars=ease((p-starStart)/Math.min(.22,1-starStart)),resident=1-stars*.88;
+        const warmGain=c.supportStrength*c.accentWeight;
         const t=clock*amp*.9+phase;
-        addVeil(scene,1.12-warmth*.63,.56+Math.sin(t*.43)*amp*.035,.1+warmth*.55,.13+warmth*.25,-.28,2,base*.92*warmth*resident);
-        addVeil(scene,.97-warmth*.43,.37+Math.cos(t*.37)*amp*.03,.08+warmth*.36,.11+warmth*.22,-.2,3,base*.54*warmth*resident);
+        addVeil(scene,1.12-warmth*.63,.56+Math.sin(t*.43)*amp*.035,(.1+warmth*.55)*c.accentScale,(.13+warmth*.25)*c.accentScale,-.28,2,base*.92*warmth*resident*warmGain);
+        addVeil(scene,.97-warmth*.43,.37+Math.cos(t*.37)*amp*.03,(.08+warmth*.36)*c.accentScale,(.11+warmth*.22)*c.accentScale,-.2,3,base*.54*warmth*resident*warmGain);
         for(const [i,[sx,sy]] of [[.20,.27],[.67,.22],[.82,.47],[.58,.66],[.29,.73],[.44,.40],[.15,.50]].entries()) {
           const glimmer=(.5+.5*Math.sin(t*(1.2+i*.11)+i*2.17))**3;
           const x=sx+Math.sin(t*.4+i)*amp*.018,y=sy+Math.cos(t*.36+i)*amp*.018;
-          const radius=.041+glimmer*amp*.019,color=2+i%2;
-          addField(scene,x,y,radius,radius*1.08,color,base*(.18+2.1*(.3+amp*(glimmer-.3)))*stars);
-          addField(scene,x,y,radius*1.8,radius*1.9,color,base*.12*glimmer*stars);
+          const radius=(.041+glimmer*amp*.019)*c.accentScale,color=2+i%2;
+          addField(scene,x,y,radius,radius*1.08,color,base*(.18+2.1*(.3+amp*(glimmer-.3)))*stars*warmGain);
+          addField(scene,x,y,radius*1.8,radius*1.9,color,base*.12*glimmer*stars*warmGain);
         }
       }
       return scene;
@@ -355,13 +414,14 @@ function responseScene({type,expression,p,clock,phase,amp,energy,speed,loop,acce
       const x=.48+Math.sin(current*.73)*drift*.055;
       const y=.26+settle*.48+Math.sin(current)*drift*.045;
       const tilt=.3-settle*.18+Math.sin(current*.67)*drift*.035;
-      addVeil(scene,x,y,.63+settle*.1,.17+settle*.17,tilt,0,base*(.98-settle*.19));
-      addVeil(scene,.14+settle*.1,.65+settle*.22,.5,.26+settle*.09,-.22+settle*.1,1,base*.48);
+      addVeil(scene,x,y,.63+settle*.1,(.17+settle*.17)*c.waveWidth,tilt,0,base*(.98-settle*.19));
+      addVeil(scene,.14+settle*.1,.65+settle*.22,.5,(.26+settle*.09)*c.waveWidth,-.22+settle*.1,1,base*.48);
       addField(scene,.56,1.08,.65,.35,0,base*.24);
       if(expression==='fulfilled') {
-        const warmth=loop ? 1 : ease((p-.19)/.58);
-        addField(scene,.71,.47,.17,.19,2,base*.65*warmth);
-        addField(scene,.77,.5,.12,.13,3,base*.22*warmth);
+        const warmth=loop ? 1 : ease((p-(.19+c.supportDelay-.28))/.58);
+        const warmGain=c.supportStrength*c.accentWeight;
+        addField(scene,.71,.47,.17*c.accentScale,.19*c.accentScale,2,base*.65*warmth*warmGain);
+        addField(scene,.77,.5,.12*c.accentScale,.13*c.accentScale,3,base*.22*warmth*warmGain);
       }
       return scene;
     }
@@ -369,7 +429,8 @@ function responseScene({type,expression,p,clock,phase,amp,energy,speed,loop,acce
       // Receive nervousness, then offer an opening and a steady warm breath.
       // The violet trembling eases as peach/gold rises from within the same
       // cloud. This is encouragement, rather than a prediction or celebration.
-      const enter=ease(p/.24),support=ease((p-.2)/.48),steady=ease((p-.5)/.4);
+      const delay=c.supportDelay-.28,steadyStart=.5+delay;
+      const enter=ease(p/.24),support=ease((p-(.2+delay))/.48),steady=ease((p-steadyStart)/Math.min(.4,1-steadyStart));
       const t=clock*(amp/.72),unsettled=amp*(1-steady);
       const wobble=Math.sin(t*3.7+phase)*unsettled*.045;
       const sway=Math.sin(t*.46+phase)*amp*.025;
@@ -378,11 +439,11 @@ function responseScene({type,expression,p,clock,phase,amp,energy,speed,loop,acce
       addVeil(scene,.57+support*.25+sway,.5+support*.08-wobble,.19+enter*.065,.23+enter*.055,
         .24-wobble*2,1,base*(.78-support*.3));
       const breath=.5-.5*Math.cos(t*1.65+phase),swell=amp*steady*breath;
-      const x=.5+sway,y=.78-support*.27-swell*.045;
-      addVeil(scene,x-.035,y+.025,.16+support*.18+swell*.13,.15+support*.12+swell*.10,
-        -.3,2,base*.92*support*(.82+steady*breath*.28));
-      addVeil(scene,x+.045,y-.08,.12+support*.15+swell*.11,.15+support*.095+swell*.085,
-        -.25,3,base*.7*support*(.9+steady*breath*.15));
+      const x=.5+sway,y=.78-support*.27-swell*.045,warmGain=c.supportStrength*c.accentWeight;
+      addVeil(scene,x-.035,y+.025,(.16+support*.18+swell*.13)*c.accentScale,(.15+support*.12+swell*.10)*c.accentScale,
+        -.3,2,base*.92*support*(.82+steady*breath*.28)*warmGain);
+      addVeil(scene,x+.045,y-.08,(.12+support*.15+swell*.11)*c.accentScale,(.15+support*.095+swell*.085)*c.accentScale,
+        -.25,3,base*.7*support*(.9+steady*breath*.15)*warmGain);
       return scene;
     }
     case 'mixed': {
@@ -396,14 +457,14 @@ function responseScene({type,expression,p,clock,phase,amp,energy,speed,loop,acce
       scene.push({kind:'mixedGradient',mode,x:.49+Math.sin(t*.51)*motion*.035,y:.48+Math.cos(t*.43)*motion*.035,
         rx:(.26+.105*unfold)*breath,ry:(.25+.1*unfold)*breath,
         angle:mode==='layered' ? Math.sin(t*.19)*motion*.085 : .595+Math.sin(t*.23)*motion*.08,
-        shift:mode==='open'?0:Math.sin(t*.79)*motion*.025,curve:Math.sin(t*.51)*motion*.065,
-        colorTravel:clock*amp*.18,colorRipple:mode==='open'?0:motion*.12,
+        shift:mode==='open'?0:Math.sin(t*.79)*motion*.025,curve:Math.sin(t*.51)*motion*.065*c.waveWidth,weaveScale:c.waveWidth,
+        colorTravel:clock*amp*.18,colorRipple:mode==='open'?0:motion*.12*c.waveWidth,
         flow:t,balance:mode==='open'?undefined:clamp(feelingBalance,.5,.9),color:0,region:0,
         strength:base*(.53+.29*unfold)*(mode==='layered'?.87:1)*(1+Math.sin(t*.67)*motion*.075)});
       if(mode==='layered')for(let i=0;i<3;i++) {
-        const glimmer=(.5+.5*Math.sin(t*(.71+i*.17)+i*2.1))**4;
+        const glimmer=(.5+.5*Math.sin(t*(.71+i*.17)+i*2.1*c.stagger))**4;
         const x=.18+i*.29+Math.sin(t*.61+i)*motion*.045,y=.22+i*.24+Math.cos(t*.47+i)*motion*.04;
-        addField(scene,x,y,.025,.028,i%primaryCount,base*.65*glimmer*unfold);
+        addField(scene,x,y,.025*c.accentScale,.028*c.accentScale,i%primaryCount,base*.65*glimmer*unfold*c.accentWeight);
         scene[scene.length-1].region=i;
       }
       return scene;
@@ -413,12 +474,13 @@ function responseScene({type,expression,p,clock,phase,amp,energy,speed,loop,acce
       // Three local warm echoes acknowledge the ordinary words once, then
       // yield to the two broad lights and their independent continuous paths.
       const resident=.2+.8*ease((p-.24)/.38);
-      for(const [i,[x,y]] of [[.22,.3],[.76,.38],[.48,.76]].entries()) {
-        const q=(p-.04-i*.09)/.4;
+      const echoes=[[.22,.3],[.76,.38],[.48,.76],[.19,.72],[.79,.77]];
+      for(const [i,[x,y]] of echoes.slice(0,c.rippleCount).entries()) {
+        const q=(p-.04-i*.09*c.stagger)/.4;
         if(q>=0&&q<=1) {
           const echo=Math.sin(Math.PI*q)**2,radius=.025+ease(q)*amp*.2;
           addField(scene,x,y,.065,.07,i,base*1.12*echo);
-          addRing(scene,x,y,radius,.038,i,base*.9*echo);
+          addRing(scene,x,y,radius*c.spread,.038*c.waveWidth,i,base*.9*echo);
         }
       }
       const settle=ease((p-.35)/.6),flow=clock*(amp/.5),t=flow*2.1+phase;
@@ -498,7 +560,9 @@ export function renderFrame(plan = {}, elapsedMs = 0, {reducedMotion=false,color
     return Array.from({length:31},(_,j)=>(j+1)/32).some(p=>avoidedColors.includes(colorGroup(a.map((channel,c)=>mix(channel,b[c],p)))));
   }) : [];
   const native=primitive===defaults.motionPrimitive;
-  const composed=native ? responseScene({type,expression:plan.expression||'default',p,clock,phase,amp,energy,speed,loop,accentIndices,primaryCount,feelingBalance:number(plan.feelingBalance,.7),mixedMode:plan.mixedMode}) : null;
+  const composition=normalizeComposition(plan.composition);
+  const composed=native ? responseScene({type,expression:plan.expression||'default',p,clock,phase,amp,energy,speed,loop,accentIndices,primaryCount,feelingBalance:number(plan.feelingBalance,.7),mixedMode:plan.mixedMode,composition}) : null;
+  if(composed&&['celebrate','setback','rest','upcoming','mixed','everyday'].includes(type))adaptSceneGeometry(composed,composition);
   const scene=composed||primitiveScene(staticPrimitive,{p,clock,phase,amp,energy,type});
   const luminousJoin=Boolean(composed)&&(type==='upcoming'||type==='setback'&&plan.expression==='renew');
   // Complementary regions keep the stronger local hue instead of producing a
@@ -533,7 +597,7 @@ export function renderFrame(plan = {}, elapsedMs = 0, {reducedMotion=false,color
         const bend=Math.sin(v*6+shape.flow)*shape.curve;
         const radius=((u+bend)/shape.rx)**2+(v/shape.ry)**2;
         if(shape.mode==='layered') {
-          const crest=.5+.5*Math.cos((u+bend)/(.29*3)*TAU-shape.flow*.55);
+          const crest=.5+.5*Math.cos((u+bend)/(.29*3*(shape.weaveScale??1))*TAU-shape.flow*.55);
           weight=crest**2.2*Math.exp(-((v/(shape.ry*2.7))**4)*.2);
         } else weight=Math.exp(-(radius**1.13)*.8);
         color=gradientColor(palette,(u+bend)/(shape.mode==='layered'?.73:shape.mode==='open'?.74:.89)+.5+shape.shift,shape.balance,avoidedSegments,
@@ -596,9 +660,19 @@ export function renderFrame(plan = {}, elapsedMs = 0, {reducedMotion=false,color
       coverage*=1-contact**3*.3;
     }
     const index=(y*LED_SIZE+x)*3;
-    frame[index]=colorTotal ? mix(255,r/colorTotal,coverage) : 255;
-    frame[index+1]=colorTotal ? mix(255,g/colorTotal,coverage) : 255;
-    frame[index+2]=colorTotal ? mix(255,b/colorTotal,coverage) : 255;
+    const emitted=[colorTotal?mix(255,r/colorTotal,coverage):255,
+      colorTotal?mix(255,g/colorTotal,coverage):255,colorTotal?mix(255,b/colorTotal,coverage):255];
+    const output=avoidedColors.length?respectDeclinedHues(emitted,avoidedColors):emitted;
+    frame[index]=output[0];frame[index+1]=output[1];frame[index+2]=output[2];
+    if(avoidedColors.length) {
+      // Uint8 rounding can move a nearly neutral shoulder pixel back across a
+      // hue boundary. Leave a small chroma margin in the actual emitted bytes.
+      const emitted=[frame[index],frame[index+1],frame[index+2]],group=colorGroup(emitted);
+      if(group!=='neutral'&&avoidedColors.includes(group)) {
+        const keep=12/(Math.max(...emitted)-Math.min(...emitted));
+        for(let channel=0;channel<3;channel++)frame[index+channel]=mix(255,emitted[channel],keep);
+      }
+    }
   }
   return frame;
 }

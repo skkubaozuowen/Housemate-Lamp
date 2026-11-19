@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import http from 'node:http';
 import { createServer } from '../server.js';
+import { SCENE_PARAMETER_LIMITS } from '../response-api.js';
 import { CATALOG, createPlan } from '../public/lib/catalog.js';
 import { validatePlan } from '../public/lib/planner.js';
 import { selectPalette, colorGroup } from '../public/lib/palettes.js';
@@ -126,8 +127,8 @@ test('AI suggestions retain catalog shape, closure and finite gesture timing', a
   assert.equal(result.mode,'ai'); assert.equal(result.plan.responseType,'setback');
   assert.equal(result.plan.motionPrimitive,CATALOG.setback.motionPrimitive);
   assert.equal(result.plan.loop,false); assert.equal(result.plan.nextState,'hold');
-  assert.ok(result.plan.durationMs >= CATALOG.setback.durationMs * .75);
-  assert.ok(result.plan.durationMs <= CATALOG.setback.durationMs * 1.25);
+  assert.ok(result.plan.durationMs >= SCENE_PARAMETER_LIMITS.setback.durationMs[0]);
+  assert.ok(result.plan.durationMs <= SCENE_PARAMETER_LIMITS.setback.durationMs[1]);
 });
 
 test('HTTP color corrections supersede locks and compose bans, target hue and motion without AI', async t => {
@@ -162,7 +163,7 @@ test('AI emotional themes replace temporary colors even when model history sugge
     responseType=type;
     const result=await (await post({text,mode:'ai',context,history:[{role:'user',content:'想要蓝色'}]})).json();
     assert.equal(result.source,'ai'); assert.equal(result.plan.paletteFamily,CATALOG[type].paletteFamily,type);
-    assert.equal(result.plan.paletteVariant,'balanced'); assert.equal(result.plan.colorCount,['mixed','upcoming'].includes(type)?4:3);
+    assert.equal(result.plan.paletteVariant,'misted','the model may soften the new scene without keeping the old named hue'); assert.equal(result.plan.colorCount,['mixed','upcoming'].includes(type)?4:3);
     assert.equal(result.preferences.lockedPalette,null);
   }
   assert.ok(sentBody.input.some(item=>item.content==='想要蓝色'),'useful history is retained; it cannot silently lock a palette');

@@ -1,4 +1,5 @@
 import { CATALOG, RESPONSE_TYPES, MOTION_PRIMITIVES, NEXT_STATES, EXPRESSIONS, createPlan } from './catalog.js';
+import { COMPOSITION_SCHEMA, normalizeComposition, validateComposition } from './composition.js';
 import { PALETTE_FAMILIES, PALETTE_VARIANTS, NAMED_COLOR_FAMILIES, isPaletteAllowed, isSemanticMixedPalette, resolvePaletteFamily, replacementPalette } from './palettes.js';
 
 export const PLAN_LIMITS = Object.freeze({
@@ -9,7 +10,7 @@ export const FEELING_TYPES = Object.freeze(['joy', 'sadness', 'calm', 'anxiety',
 export const MIXED_MODES = Object.freeze(['paired', 'layered', 'open']);
 const INTEGER_FIELDS = new Set(['colorCount', 'durationMs', 'transitionMs', 'seed']);
 const ENUM_FIELDS = { responseType: RESPONSE_TYPES, expression: EXPRESSIONS, paletteFamily: Object.keys(PALETTE_FAMILIES), paletteVariant: PALETTE_VARIANTS, motionPrimitive: MOTION_PRIMITIVES, nextState: NEXT_STATES, feelingPrimary: FEELING_TYPES, feelingSecondary: [...FEELING_TYPES, 'none'], feelingTertiary: [...FEELING_TYPES, 'none'], mixedMode: MIXED_MODES };
-const PLAN_FIELDS = ['version', ...Object.keys(ENUM_FIELDS), ...Object.keys(PLAN_LIMITS), 'loop', 'requiresUserInput'];
+const PLAN_FIELDS = ['version', ...Object.keys(ENUM_FIELDS), ...Object.keys(PLAN_LIMITS), 'loop', 'requiresUserInput', 'composition'];
 const COLOR_NAMES = ['blue', 'pink', 'purple', 'green', 'orange', 'red', 'yellow', 'neutral'];
 export const DEFAULT_PREFERENCES = Object.freeze({ avoidedColors: [], rejectedPalettes: [], lockedPalette: null, speedScale: 1, amplitudeScale: 1 });
 
@@ -19,7 +20,7 @@ export const PLAN_SCHEMA = {
     version: { type: 'integer', enum: [1] },
     ...Object.fromEntries(Object.entries(ENUM_FIELDS).map(([key, values]) => [key, { type: 'string', enum: values }])),
     ...Object.fromEntries(Object.entries(PLAN_LIMITS).map(([key, [minimum, maximum]]) => [key, { type: INTEGER_FIELDS.has(key) ? 'integer' : 'number', minimum, maximum }])),
-    loop: { type: 'boolean' }, requiresUserInput: { type: 'boolean' }
+    loop: { type: 'boolean' }, requiresUserInput: { type: 'boolean' }, composition: COMPOSITION_SCHEMA
   },
   required: PLAN_FIELDS
 };
@@ -28,17 +29,22 @@ function inRange(value, key) {
   return typeof value === 'number' && Number.isFinite(value) && value >= PLAN_LIMITS[key][0] && value <= PLAN_LIMITS[key][1] && (!INTEGER_FIELDS.has(key) || Number.isInteger(value));
 }
 export function validatePlan(raw) {
-  return Boolean(raw && typeof raw === 'object' && !Array.isArray(raw) && Object.keys(raw).length === PLAN_FIELDS.length && PLAN_FIELDS.every(key => Object.hasOwn(raw, key)) && raw.version === 1 && Object.entries(ENUM_FIELDS).every(([key, values]) => values.includes(raw[key])) && Object.keys(PLAN_LIMITS).every(key => inRange(raw[key], key)) && typeof raw.loop === 'boolean' && typeof raw.requiresUserInput === 'boolean');
+  return Boolean(raw && typeof raw === 'object' && !Array.isArray(raw) && Object.keys(raw).length === PLAN_FIELDS.length && PLAN_FIELDS.every(key => Object.hasOwn(raw, key)) && raw.version === 1 && Object.entries(ENUM_FIELDS).every(([key, values]) => values.includes(raw[key])) && Object.keys(PLAN_LIMITS).every(key => inRange(raw[key], key)) && typeof raw.loop === 'boolean' && typeof raw.requiresUserInput === 'boolean' && validateComposition(raw.composition));
 }
 export function normalizePlan(raw, fallback = null) {
   const candidate = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   const defaultType = RESPONSE_TYPES.includes(fallback?.responseType) ? fallback.responseType : 'idle';
   const type = RESPONSE_TYPES.includes(candidate.responseType) ? candidate.responseType : defaultType;
-  const base = { ...createPlan(type), ...(validatePlan(fallback) ? fallback : {}) };
+  // Old saved plans did not contain composition; their valid fallback values
+  // remain usable while all new strict model output includes the nested object.
+  const fallbackPlan = fallback && typeof fallback === 'object' && !Array.isArray(fallback)
+    ? { ...fallback, composition:normalizeComposition(fallback.composition) } : null;
+  const base = { ...createPlan(type), ...(validatePlan(fallbackPlan) ? fallbackPlan : {}) };
   const result = { version: 1 };
   for (const [key, values] of Object.entries(ENUM_FIELDS)) result[key] = values.includes(candidate[key]) ? candidate[key] : base[key];
   for (const key of Object.keys(PLAN_LIMITS)) result[key] = inRange(candidate[key], key) ? candidate[key] : base[key];
   for (const key of ['loop', 'requiresUserInput']) result[key] = typeof candidate[key] === 'boolean' ? candidate[key] : base[key];
+  result.composition = normalizeComposition(candidate.composition, base.composition);
   if (type === 'mixed' && (result.feelingSecondary === 'none' || result.feelingSecondary === result.feelingPrimary)) result.feelingSecondary = result.feelingPrimary === 'sadness' ? 'joy' : 'sadness';
   if (result.mixedMode !== 'layered' || [result.feelingPrimary, result.feelingSecondary].includes(result.feelingTertiary)) result.feelingTertiary = 'none';
   if (result.mixedMode === 'layered' && result.feelingTertiary === 'none') result.mixedMode = 'paired';
@@ -348,7 +354,7 @@ export function planLocal(input, context = {}) {
     if (solitudeContext && !joyful && !quietAchievement) understood = false;
     return make('celebrate', { expression: quietAchievement && !/太开心|好开心|太幸福|太高兴|thrilled|so happy|신나|너무\s*행복/i.test(text) ? 'quiet' : 'default' });
   }
-  if (retry && difficult) return make('setback', { expression:'renew' });
+  if (difficult && (retry || encouragement || /安慰我|给我.{0,5}(?:支持|力量)|\b(?:comfort me|give me (?:some )?(?:support|strength))\b|위로해|힘이\s*필요/i.test(text))) return make('setback', { expression:'renew' });
   // S04 answers expressed nervousness or a request for courage. A date or
   // event name alone does not establish that the person needs encouragement.
   if (tense || encouragement) return make('upcoming');

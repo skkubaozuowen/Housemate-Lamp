@@ -1,3 +1,5 @@
+import { normalizeComposition } from './composition.js';
+
 // These are prototype design hypotheses, to be compared and revised in workshops.
 export const MOTION_PRIMITIVES = Object.freeze(['hold', 'slow_drift', 'pass', 'expand', 'converge', 'separate', 'alternate', 'blend', 'settle', 'interrupt_return', 'local_echo']);
 export const NEXT_STATES = Object.freeze(['idle', 'hold', 'waiting', 'accompany', 'withdraw']);
@@ -35,7 +37,7 @@ const frameworkDefinitions = [
   ['B04','clarify','A little more?','等待补充','조금 더 들려주세요','One soft glow probes to a side, hesitates, returns and tries another direction, then waits.','An interrupted exploratory movement leaves room for continuation.','sea_glass','alternate',.4,.44,.55,4200,false,650,'waiting',true],
   ['B05','farewell','Until next time','交流结束','대화 마무리','The glow gathers once and returns to ordinary ambient light.','A gathering gesture closes the exchange without a blackout.','sea_glass','converge',.4,.42,.65,3800,false,1000,'idle',false],
   ['S01','celebrate','Good news & anticipation','好事与期待','좋은 일과 기대','Warm apricot, gold and rose bloom in layered ripples, fade gently, and leave blue-violet-green twinkles flowing onward.','Shared delight and positive anticipation can range from quiet recognition to an expansive celebration with a gentle ambient tail.','apricot_rose','expand',.76,.72,.88,8000,false,1000,'hold',false],
-  ['S02','setback','A difficult moment','不顺与接纳','속상한 순간','Violet and rose-red waves flow beneath differently sized red and blue glows that softly appear, drift and disappear in staggered cycles. An expressed new attempt instead lets gold enter and become warm yellow with gentle star-like twinkles.','Continuing waves with passing red and blue glows stay with discomfort; gradually emerging gold supports an expressed willingness to try again.','dusk_indigo','slow_drift',.52,.34,.78,9000,false,1100,'hold',false],
+  ['S02','setback','A difficult moment','不顺与接纳','속상한 순간','Violet and rose-red waves flow beneath differently sized red and blue glows that softly appear, drift and disappear in staggered cycles. When gentle support is appropriate, gold can enter after the violet waves and become warm yellow with gentle star-like twinkles.','Continuing waves with passing red and blue glows stay with discomfort; gradually emerging gold offers optional support after receiving the difficulty, without requiring a declaration of trying again or claiming the difficulty is resolved.','dusk_indigo','slow_drift',.52,.34,.78,9000,false,1100,'hold',false],
   ['S03','rest','After a tiring day','疲惫与休息','지친 하루','A broad sloping cyan veil opens, lowers and gradually slows into a spacious resting field.','Opening space and easing downward distinguish rest from the recurring tide of a difficult moment.','mist_blue','slow_drift',.5,.3,.76,10000,false,1200,'hold',false],
   ['S04','upcoming','A little courage','紧张时给予勇气','긴장에 용기를','A wavering violet glow settles as peach-gold warmth rises through it and opens into a broad, steady breathing field.','A single connected gesture acknowledges expressed nervousness and offers courage without predicting an outcome.','horizon_glow','settle',.56,.4,.72,12000,false,1000,'hold',false],
   ['S05','mixed','Interwoven feelings','交织的感受','겹쳐진 감정','Luminous color gradients travel along the light field, gradually replacing neighboring colors through soft continuous transitions.','Several feelings can coexist and interweave through color, flow and space without requiring a single label or a fixed dominant color.','mixed_warm_cool','blend',.62,.4,.8,11000,false,1200,'hold',false],
@@ -63,5 +65,5 @@ export function createPlan(type = 'idle', overrides = {}) {
   const seed = ((Date.now() & 0xffffffff) ^ Math.imul(++sequence, 2654435761)) >>> 0;
   return {version:1,responseType,...parameters,expression:'default',paletteVariant:'balanced',colorCount:['mixed','upcoming'].includes(responseType) ? 4 : 3,
     feelingPrimary:'joy',feelingSecondary:responseType === 'mixed' ? 'sadness' : 'none',feelingBalance:.7,
-    mixedMode:'paired',feelingTertiary:'none',seed,...overrides};
+    mixedMode:'paired',feelingTertiary:'none',seed,...overrides,composition:normalizeComposition(overrides.composition)};
 }
