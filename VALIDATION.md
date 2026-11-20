@@ -1,5 +1,15 @@
 # Prototype validation
 
+## White basic light and finite responses · 2026-11-20 · v3.10.0
+
+Complete suite: **325 passed, 0 failed**. Changed modules and `git diff --check` passed. An independent run also passed all 325 checks.
+
+- B01 opens once in 1.4 seconds and remains available for listening, incorporating the user's clarification that it should not return to white mid-turn. Real microphone-volume feedback and two-second silence submission continue. B02 is 0.85 seconds; B03's default orbit is about 2.42 seconds and remains present only while the real request is pending. B04 and B05 are 2.0 and 1.8 seconds and return to the basic lamp. Existing B gestures were moderately enlarged without adding shapes.
+- All eleven ordinary S expressions have a 10–15-second finite response interval followed by a two-second dim-and-rise transition into exact neutral RGB white. Idle is static. Explicit company, manual Hold, boundaries and color correction retain their intentional behavior. Kept palette preferences survive the white interval for the next expression.
+- S01 celebration and S02 support recede from the white ground into a neutral dark star stage; S02's broad yellow field clears before its points finish. A brightness-based UI theme keeps text readable while the actual RGB output is dark, without changing the layout. Local browser playback confirmed visible colored points on the dark ground and the subsequent white lamp. Screenshots are in ignored local `tmp/housemate-v3.10-stars.png` and `tmp/housemate-v3.10-white-idle.png`.
+- Lifecycle regressions cover once-only completion, all variants returning to white, old-plan normalization, pause/hidden time, interrupted fades, reduced motion, continuing voice input, short voice-to-receipt handoff and a single RAF. Independent probes covered 264 parameter-bound combinations, 1,320 valid frames and 354,816 final pixels across hue exclusions, including the dark star stage; no prohibited hues were emitted.
+- Actual configured AI calls using invented test utterances returned S01/default at 12 seconds and S02/renew at 14 seconds, both finite and nextState idle. USB protocol, physical brightness cap and microphone recognition logic were unchanged. No physical lamp or live microphone session was tested in this revision.
+
 ## Two-second voice silence threshold · 2026-11-16 · v3.8.1
 
 Complete suite: **282 passed, 0 failed**. `git diff --check` passed.

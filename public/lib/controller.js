@@ -1,5 +1,5 @@
 import { createPlan, hasAmbientTail } from './catalog.js';
-import { planLocal, normalizePlan, validatePlan, normalizePreferences, applyPreferences } from './planner.js';
+import { planLocal, normalizePlan, validatePlan, normalizePreferences, applyPreferences, SCENE_TYPES } from './planner.js';
 import { PALETTE_FAMILIES, selectPalette, colorGroup, isPaletteAllowed, isSemanticMixedPalette, paletteSettings, resolvePaletteFamily } from './palettes.js';
 
 /** Coordinates one request and one rendering timeline. No transcript is persisted. */
@@ -35,13 +35,17 @@ export class SessionController {
   emit() { this.onChange(this.snapshot()); }
   display(plan, { preserveProgress = false } = {}) {
     this.plan = normalizePlan(plan);
+    const basicLight = this.plan.responseType === 'idle';
     // The exported/current plan must describe the palette actually on screen,
     // including a session lock or a fallback after a declined color.
     const lock = this.preferences.lockedPalette;
-    if (lock && (isPaletteAllowed(lock.paletteFamily, this.preferences)
+    if (!basicLight && lock && (isPaletteAllowed(lock.paletteFamily, this.preferences)
       || isSemanticMixedPalette(lock) && !this.preferences.rejectedPalettes.includes(lock.paletteFamily))) Object.assign(this.plan, lock);
-    this.plan.paletteFamily = resolvePaletteFamily(this.plan, this.preferences) || 'neutral_gray';
-    const colors = selectPalette(this.plan, this.preferences);
+    this.plan.paletteFamily = basicLight ? 'neutral_gray' : resolvePaletteFamily(this.plan, this.preferences) || 'neutral_gray';
+    if (basicLight) this.plan.colorCount = 1;
+    // The ordinary lamp is white. Color preferences remain in the session for
+    // the next expression without tinting the resting lamp between turns.
+    const colors = basicLight ? [[255,255,255]] : selectPalette(this.plan, this.preferences);
     // Late celebration flecks are optional: a named/kept palette or a declined
     // hue must never acquire an extra color behind the user's choice.
     const allowStars = this.plan.responseType === 'celebrate' && this.plan.expression !== 'quiet'
@@ -163,7 +167,12 @@ export class SessionController {
       this.respond(next);
       return;
     }
-    const next = this.plan.responseType === 'receive_thanks' ? this.stableState : this.plan.nextState;
+    const returnsToBasic = ['clarify','farewell',...SCENE_TYPES].includes(this.plan.responseType)
+      && !(this.plan.responseType === 'rest' && this.plan.nextState === 'accompany');
+    // An explicit manual color/movement correction may keep the adjusted lamp.
+    // The finite B/S expressions still return to their ordinary white baseline.
+    const next = returnsToBasic ? 'idle' : this.plan.responseType === 'receive_thanks' ? this.stableState
+      : this.plan.responseType === 'repair' && this.plan.nextState === 'idle' ? 'hold' : this.plan.nextState;
     this.settle(next);
   }
   settle(next = 'hold') {
@@ -172,7 +181,8 @@ export class SessionController {
     this.phase = next === 'waiting' ? 'waiting' : 'idle';
     let stable;
     if (next === 'accompany') stable = createPlan('rest', { ...palette, loop:true, nextState:'accompany' });
-    else if (next === 'idle') stable = createPlan('idle', { ...palette });
+    else if (next === 'idle') stable = createPlan('idle', {
+      seed:this.plan.seed, transitionMs:SCENE_TYPES.includes(this.plan.responseType) ? 2000 : 450 });
     else stable = createPlan(next === 'withdraw' ? 'withdraw' : 'wait', {
       ...palette, motionPrimitive: 'hold', energy: 0, amplitude: 0, loop: true,
       nextState: next, requiresUserInput: next === 'waiting', transitionMs: 900 });
@@ -188,7 +198,7 @@ export class SessionController {
       this.stablePlan = normalizePlan({ ...this.plan, motionPrimitive: 'hold', loop: true, energy: 0, amplitude: 0, nextState: next });
       this.emit();
     } else {
-      this.stablePlan = applyPreferences(stable, this.preferences, this.plan);
+      this.stablePlan = next === 'idle' ? stable : applyPreferences(stable, this.preferences, this.plan);
       this.display(this.stablePlan);
     }
   }

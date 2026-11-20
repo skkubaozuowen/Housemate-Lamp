@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { COMPOSITION_DEFAULTS, COMPOSITION_LIMITS, COMPOSITION_SCHEMA, normalizeComposition, validateComposition } from '../public/lib/composition.js';
-import { CATALOG, createPlan } from '../public/lib/catalog.js';
-import { PLAN_SCHEMA, createScenePlan, normalizePlan, planLocal, validatePlan } from '../public/lib/planner.js';
+import { CATALOG, SCENE_DURATION_LIMITS, SCENE_RESPONSE_TYPES, createPlan } from '../public/lib/catalog.js';
+import { PLAN_SCHEMA, applyPreferences, createScenePlan, normalizePlan, planLocal, validatePlan } from '../public/lib/planner.js';
 import { extractPlan, requestPlan, PLAN_INSTRUCTIONS } from '../response-api.js';
 
 const customComposition = () => ({ ...COMPOSITION_DEFAULTS, fieldScale:1.16, spread:1.12, waveWidth:1.2, waveCount:4, rippleCount:4, spotCount:6, accentScale:1.3, accentWeight:.8, stagger:1.2, supportDelay:.36, supportStrength:.72, elongation:1.15 });
@@ -50,14 +50,14 @@ test('the nested strict schema rejects unknown, missing, fractional-count and no
 });
 
 test('real model orchestration survives profile construction without replacing the scene language', async () => {
-  const proposed=createScenePlan('setback','default',{ seed:88, energy:.61, speed:.48, amplitude:.81, durationMs:12500, transitionMs:1300, composition:customComposition(), paletteFamily:'named_blue',motionPrimitive:'hold',loop:true,nextState:'withdraw' });
+  const proposed=createPlan('setback',{ seed:88, energy:.61, speed:.48, amplitude:.81, durationMs:12500, transitionMs:1300, composition:customComposition(), paletteFamily:'named_blue',motionPrimitive:'hold',loop:true,nextState:'withdraw' });
   const {plan,request}=await remote('我很难过，事情没有成功',proposed);
   for(const key of ['energy','speed','amplitude','durationMs','transitionMs','seed']) assert.equal(plan[key],proposed[key],key);
   assert.deepEqual(plan.composition,proposed.composition);
   assert.equal(plan.paletteFamily,'dusk_indigo');
   assert.equal(plan.motionPrimitive,CATALOG.setback.motionPrimitive);
   assert.equal(plan.loop,false);
-  assert.equal(plan.nextState,'hold');
+  assert.equal(plan.nextState,'idle');
   assert.equal(request.store,false);
   assert.equal(request.text.format.strict,true);
 });
@@ -118,9 +118,9 @@ test('recognized family boundaries and mixed feeling evidence survive a differen
 });
 
 test('globally valid scene extremes are clamped to a native aesthetic envelope, invalid bounds are rejected', async () => {
-  const proposed=createScenePlan('rest','default',{energy:1,speed:2,amplitude:1,durationMs:400,transitionMs:150,composition:customComposition()});
+  const proposed=createPlan('rest',{energy:1,speed:2,amplitude:1,durationMs:400,transitionMs:150,composition:customComposition()});
   const {plan}=await remote('今天真的很累',proposed);
-  assert.deepEqual([plan.energy,plan.speed,plan.amplitude,plan.durationMs,plan.transitionMs],[.58,.46,.9,8000,900]);
+  assert.deepEqual([plan.energy,plan.speed,plan.amplitude,plan.durationMs,plan.transitionMs],[.58,.46,.9,10000,900]);
   assert.equal(plan.composition.spotCount,5);
   for(const update of [{speed:2.1},{composition:{...proposed.composition,waveCount:5}},{composition:{...proposed.composition,stagger:NaN}}]) {
     const bad=await remote('今天真的很累',{...proposed,...update});
@@ -146,7 +146,7 @@ test('user speed, amplitude, hue locks and bans apply after model scene bounds',
   assert.equal(plan.colorCount,2);
   assert.equal(plan.speed,.25);
   assert.equal(plan.amplitude,.48);
-  assert.equal(plan.durationMs,20000,'explicit slower preference remains final within global safety bounds');
+  assert.equal(plan.durationMs,15000,'slower movement does not extend an ordinary response beyond 15 seconds');
 });
 
 
@@ -180,4 +180,63 @@ test('S02 prompt offers optional density references without flattening disclosur
     'does not automatically erase the expressed intensity',
     'Strong sadness need not copy the denser waves of anger'
   ]) assert.ok(guidance.includes(intent),intent);
+});
+
+
+test('all scene defaults and imported ordinary variants finish in 10–15 seconds then choose white idle', () => {
+  const variants={celebrate:['default','quiet'],setback:['default','renew'],rest:['default','fulfilled'],upcoming:['default','tense','anticipation','neutral'],mixed:['bittersweet'],everyday:['default']};
+  for(const type of SCENE_RESPONSE_TYPES) for(const expression of variants[type]) {
+    const preview=createScenePlan(type,expression);
+    assert.equal(preview.durationMs,expression==='renew'?14000:12000,`${type}:${expression} default`);
+    assert.equal(preview.loop,false);
+    assert.equal(preview.nextState,'idle');
+    for(const durationMs of [400,4200,20000]) {
+      const legacy=createPlan(type,{expression,durationMs,nextState:'hold',loop:true});
+      const imported=normalizePlan(legacy);
+      assert.equal(imported.durationMs,Math.max(SCENE_DURATION_LIMITS[0],Math.min(SCENE_DURATION_LIMITS[1],durationMs)));
+      assert.equal(imported.nextState,'idle');
+      assert.equal(imported.loop,false);
+      assert.equal(imported.expression,expression,'legacy expression stays readable');
+    }
+  }
+  const invited=planLocal('陪我待一会儿').plan;
+  assert.equal(invited.loop,true);
+  assert.equal(invited.nextState,'accompany','explicit invitation remains distinct from ordinary finite scenes');
+  const boundary=planLocal('让我一个人待着').plan;
+  assert.equal(boundary.nextState,'withdraw');
+});
+
+test('short B timing is fixed across old plans and user speed preferences while clarification stays open on idle', () => {
+  const expected={greet:1400,acknowledge:850,processing:2400,clarify:2000,farewell:1800};
+  for(const [type,durationMs] of Object.entries(expected)) {
+    const imported=normalizePlan(createPlan(type,{durationMs:20000,nextState:'hold',loop:true}));
+    assert.equal(imported.durationMs,durationMs,type);
+    assert.equal(imported.loop,type==='processing',type);
+    assert.equal(imported.nextState,type==='greet'?'hold':'idle',type);
+    assert.equal(imported.requiresUserInput,type==='clarify',type);
+    for(const speedScale of [.2,2]) {
+      const preferred=applyPreferences(imported,{speedScale,amplitudeScale:.5});
+      assert.equal(preferred.durationMs,durationMs,`${type}: preferences keep engineered time`);
+      assert.equal(preferred.nextState,type==='greet'?'hold':'idle');
+      assert.equal(preferred.requiresUserInput,type==='clarify');
+      assert.equal(preferred.amplitude,imported.amplitude*.5,'movement preference still applies');
+    }
+  }
+  const idle=normalizePlan(createPlan('idle',{motionPrimitive:'slow_drift',energy:1,amplitude:1,loop:false}));
+  assert.equal(idle.motionPrimitive,'hold');
+  assert.equal(idle.energy,0);
+  assert.equal(idle.amplitude,0);
+  assert.equal(idle.loop,true);
+  assert.equal(createPlan('idle').paletteFamily,'neutral_gray');
+});
+
+test('API accepts bounded orchestration but replaces old short or endless scene lifecycle', async () => {
+  for(const [text,type] of [['今天很开心','celebrate'],['我很难过','setback'],['今天很累','rest'],['明天发表好紧张','upcoming'],['心情复杂','mixed'],['明天发表','everyday']]) {
+    for(const durationMs of [4200,20000]) {
+      const {plan}=await remote(text,createPlan(type,{durationMs,loop:true,nextState:'hold'}));
+      assert.equal(plan.durationMs,durationMs<10000?10000:15000,`${type}:${durationMs}`);
+      assert.equal(plan.loop,false,type);
+      assert.equal(plan.nextState,'idle',type);
+    }
+  }
 });

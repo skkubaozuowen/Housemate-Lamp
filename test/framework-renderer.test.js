@@ -53,7 +53,7 @@ test('renewal lets gold enter violet, opens into warmth and finishes with quiet 
   const base=createScenePlan('setback','default',{seed:4589});
   const renewal=createScenePlan('setback','renew',{seed:4589});
   assert.deepEqual(renderFrame(base,3000),renderFrame(renewal,3000),'intention to try again begins with the same cool acknowledgment');
-  const ordinary=at(base,.95),entering=pixels(renderFrame(renewal,6000)),warmField=pixels(renderFrame(renewal,10000));
+  const ordinary=at(base,.95),entering=pixels(renderFrame(renewal,6000)),warmField=pixels(at(renewal,.84));
   assert.ok(pixels(ordinary).filter(rgb=>colorGroup(rgb)==='red').length>35,'the difficult moment keeps a clearly visible rose-red wave');
   assert.ok(pixels(ordinary).filter(rgb=>colorGroup(rgb)==='purple').length>35,'violet remains clearly present beside the red');
   assert.equal(pixels(ordinary).filter(rgb=>['yellow','orange'].includes(colorGroup(rgb))).length,0,'discomfort alone does not trigger the encouraging gold transition');
@@ -352,7 +352,7 @@ test('everyday sharing acknowledges with distributed warm echoes, then separates
   }
   const first=peaks(at(scene,.2,options))[0],last=echoes[0];
   assert.ok(Math.hypot(first.x-last.x,first.y-last.y)>=5,'different sites answer in a gentle sequence');
-  for(const elapsed of [scene.durationMs,8200,16000,24000,44000,60000]) {
+  for(const elapsed of [scene.durationMs,scene.durationMs+4000,24000,32000,44000,60000]) {
     const frame=renderFrame(scene,elapsed,options),lights=peaks(frame).sort((a,b)=>a.x-b.x);
     assert.equal(lights.length,2,'the tail retains two independently visible filled centers');
     positions.push(lights);
@@ -371,7 +371,7 @@ test('everyday sharing acknowledges with distributed warm echoes, then separates
     assert.ok(Math.max(...frame.map((value,index)=>Math.abs(value-previous[index])))<=6,'the nod and breathing never flash');
     previous=frame;
   }
-  assert.deepEqual(renderFrame({...scene,amplitude:0},8000),renderFrame({...scene,amplitude:0},24000),'zero amplitude leaves a static pair');
+  assert.deepEqual(renderFrame({...scene,amplitude:0},scene.durationMs*1.5),renderFrame({...scene,amplitude:0},scene.durationMs*3),'zero amplitude leaves a static pair');
   assert.deepEqual(renderFrame(scene,8000,{reducedMotion:true}),renderFrame(scene,24000,{reducedMotion:true}));
   assert.deepEqual(renderFrame({...scene,motionPrimitive:'hold'},8000),renderFrame({...scene,motionPrimitive:'hold'},24000),'an explicit hold remains still');
 });
@@ -400,9 +400,11 @@ test('processing has two filled soft light balls with one coherent orbit and no 
   assert.equal(first.length,2);assert.equal(next.length,2,'two independently visible light balls share the orbit');
   const vector=points=>[points[0].x-points[1].x,points[0].y-points[1].y],a=vector(first),b=vector(next);
   assert.ok(Math.abs(a[0]*b[0]+a[1]*b[1])/(Math.hypot(...a)*Math.hypot(...b))<.4,'the pair rotates by a quarter turn');
-  assert.ok(period>=4000&&period<=5000,'one default revolution takes four to five seconds');
+  assert.ok(period>=2350&&period<=2450,'one default revolution takes about 2.4 seconds');
   assert.deepEqual(initial,renderFrame(scene,period,options),'one revolution returns both clouds');
-  assert.ok(difference(renderFrame(scene,scene.durationMs-8,options),renderFrame(scene,scene.durationMs+8,options))<.8,'the catalog loop boundary does not reset the orbit');
+  const seam=difference(renderFrame(scene,scene.durationMs-8,options),renderFrame(scene,scene.durationMs+8,options));
+  const adjacent=difference(renderFrame(scene,scene.durationMs-18,options),renderFrame(scene,scene.durationMs-2,options));
+  assert.ok(seam<1.3&&Math.abs(seam-adjacent)<.3,'the faster orbit crosses the catalog boundary with its ordinary local frame change');
   assert.ok(difference(renderFrame(scene,900,options),renderFrame({...scene,speed:scene.speed*1.5},900,options))>2,'the speed control changes the rotation');
   const still={...scene,amplitude:0};
   assert.deepEqual(renderFrame(still,200,options),renderFrame(still,4000,options),'zero amplitude freezes both balls');

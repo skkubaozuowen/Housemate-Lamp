@@ -126,7 +126,7 @@ test('AI suggestions retain catalog shape, closure and finite gesture timing', a
   const result = await (await post({text:'Today was hard and I want to share',mode:'ai'})).json();
   assert.equal(result.mode,'ai'); assert.equal(result.plan.responseType,'setback');
   assert.equal(result.plan.motionPrimitive,CATALOG.setback.motionPrimitive);
-  assert.equal(result.plan.loop,false); assert.equal(result.plan.nextState,'hold');
+  assert.equal(result.plan.loop,false); assert.equal(result.plan.nextState,'idle');
   assert.ok(result.plan.durationMs >= SCENE_PARAMETER_LIMITS.setback.durationMs[0]);
   assert.ok(result.plan.durationMs <= SCENE_PARAMETER_LIMITS.setback.durationMs[1]);
 });
@@ -200,7 +200,7 @@ test('known tense-event meaning survives a remote celebration suggestion and use
   assert.equal(result.plan.colorCount,4);
   assert.equal(result.plan.durationMs,12000);
   assert.equal(result.plan.motionPrimitive,CATALOG.upcoming.motionPrimitive);
-  assert.equal(result.plan.nextState,'hold');
+  assert.equal(result.plan.nextState,'idle');
   assert.equal(result.plan.loop,false);
   assert.ok(validatePlan(result.plan));
 });

@@ -1,4 +1,4 @@
-import { CATALOG, RESPONSE_TYPES, MOTION_PRIMITIVES, NEXT_STATES, EXPRESSIONS, createPlan } from './catalog.js';
+import { CATALOG, RESPONSE_TYPES, MOTION_PRIMITIVES, NEXT_STATES, EXPRESSIONS, SCENE_RESPONSE_TYPES, SCENE_DURATION_LIMITS, createPlan } from './catalog.js';
 import { COMPOSITION_SCHEMA, normalizeComposition, validateComposition } from './composition.js';
 import { PALETTE_FAMILIES, PALETTE_VARIANTS, NAMED_COLOR_FAMILIES, isPaletteAllowed, isSemanticMixedPalette, resolvePaletteFamily, replacementPalette } from './palettes.js';
 
@@ -51,6 +51,16 @@ export function normalizePlan(raw, fallback = null) {
   // Open complexity carries no claim about which emotions are present. These
   // legacy pair values are ignored by the palette helper in open mode.
   if (result.mixedMode === 'open') Object.assign(result, { feelingPrimary:'joy', feelingSecondary:'sadness', feelingTertiary:'none', feelingBalance:.5 });
+  // Old saved ordinary scenes must not retain an endless ambient/hold lifecycle.
+  // An explicitly invited legacy accompaniment remains a separate boundary case.
+  if (SCENE_RESPONSE_TYPES.includes(type) && !(type === 'rest' && result.loop && result.nextState === 'accompany')) {
+    result.durationMs = Math.max(SCENE_DURATION_LIMITS[0], Math.min(SCENE_DURATION_LIMITS[1], result.durationMs));
+    Object.assign(result, { loop:false, nextState:'idle', requiresUserInput:false });
+  }
+  if (['greet','acknowledge','processing','clarify','farewell'].includes(type)) {
+    Object.assign(result, { durationMs:CATALOG[type].durationMs, loop:type === 'processing', nextState:type === 'greet' ? 'hold' : 'idle', requiresUserInput:type === 'clarify' });
+  }
+  if (type === 'idle') Object.assign(result, { motionPrimitive:'hold', energy:0, amplitude:0, loop:true, nextState:'idle', requiresUserInput:false });
   return result;
 }
 
@@ -78,15 +88,19 @@ export function applyPreferences(rawPlan, rawPreferences, currentPlan = null) {
   plan.paletteFamily = resolvePaletteFamily(plan, prefs) || resolvePaletteFamily(currentPlan || plan, { ...prefs, rejectedPalettes: [] }) || 'neutral_gray';
   plan.speed = clamp(plan.speed * prefs.speedScale, ...PLAN_LIMITS.speed);
   plan.amplitude = clamp(plan.amplitude * prefs.amplitudeScale, ...PLAN_LIMITS.amplitude);
-  if (!['idle', 'acknowledge', 'processing', 'error', 'withdraw'].includes(plan.responseType)) plan.durationMs = clamp(Math.round(plan.durationMs / prefs.speedScale), ...PLAN_LIMITS.durationMs);
+  // User motion preferences still change movement, but B timing is engineered
+  // and ordinary S responses must finish within the shared 10–15 second window.
+  if (!['idle', 'greet', 'acknowledge', 'processing', 'clarify', 'farewell', 'error', 'withdraw'].includes(plan.responseType)) plan.durationMs = clamp(Math.round(plan.durationMs / prefs.speedScale), ...PLAN_LIMITS.durationMs);
+  if (SCENE_RESPONSE_TYPES.includes(plan.responseType) && !(plan.responseType === 'rest' && plan.loop && plan.nextState === 'accompany')) plan.durationMs = clamp(plan.durationMs, ...SCENE_DURATION_LIMITS);
   // Finite gestures end; only an explicitly invited accompaniment or engine state may loop.
   if (!['idle', 'processing', 'accompany'].includes(plan.responseType) && !(plan.responseType === 'rest' && plan.nextState === 'accompany')) plan.loop = false;
   if (plan.responseType === 'withdraw') { plan.nextState = 'withdraw'; plan.requiresUserInput = false; }
-  if (['clarify', 'wait'].includes(plan.responseType)) { plan.nextState = 'waiting'; plan.requiresUserInput = true; }
+  if (plan.responseType === 'clarify') { plan.nextState = 'idle'; plan.requiresUserInput = true; }
+  if (plan.responseType === 'wait') { plan.nextState = 'waiting'; plan.requiresUserInput = true; }
   return plan;
 }
 
-export const SCENE_TYPES = Object.freeze(['celebrate', 'setback', 'rest', 'upcoming', 'mixed', 'everyday']);
+export const SCENE_TYPES = SCENE_RESPONSE_TYPES;
 const SCENE_EXPRESSIONS = Object.freeze({
   celebrate: ['default', 'quiet'], setback: ['default', 'renew'], rest: ['default', 'fulfilled'],
   upcoming: ['default'], mixed: ['bittersweet'], everyday: ['default']
@@ -98,15 +112,15 @@ export function createScenePlan(type, expression = 'default', overrides = {}) {
   const allowed = SCENE_EXPRESSIONS[type];
   const resolved = allowed.includes(expression) ? expression : allowed[0];
   const variation = {
-    quiet: { energy: .52, speed: .42, amplitude: .64, durationMs: 9000 },
-    renew: { paletteFamily: 'renewal_gold', colorCount: 4, durationMs: 12000 },
+    quiet: { energy: .52, speed: .42, amplitude: .64, durationMs: 12000 },
+    renew: { paletteFamily: 'renewal_gold', colorCount: 4, durationMs: 14000 },
     fulfilled: { paletteFamily: 'rest_glow', colorCount: 4 },
     bittersweet: { colorCount: 4, mixedMode:'open', feelingBalance:.5 }
   }[resolved] || {};
   // S04 is one connected encouragement gesture for expressed tension. Older
   // expression names remain readable without restoring separate visual modes.
-  return createPlan(type, { expression: resolved, paletteVariant: 'balanced', ...variation, ...overrides,
-    ...(type === 'upcoming' ? { expression:'default' } : {}) });
+  return normalizePlan(createPlan(type, { expression: resolved, paletteVariant: 'balanced', ...variation, ...overrides,
+    ...(type === 'upcoming' ? { expression:'default' } : {}) }));
 }
 
 export function seedFromText(text) {

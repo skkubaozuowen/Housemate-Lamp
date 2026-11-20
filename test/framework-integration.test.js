@@ -74,11 +74,12 @@ test('each canonical scenario travels through receipt, HTTP planning, response, 
     assert.equal(c.plan.loop, false, 'daily sharing does not implicitly request ongoing company');
     assert.ok(validatePlan(c.plan));
     if (type === 'mixed') assert.equal(c.plan.colorCount, 4, 'both warm and cool regions remain in the plan');
-    const palette = c.plan.paletteFamily;
+    assert.ok(c.plan.durationMs >= 10000 && c.plan.durationMs <= 15000);
     r.finish();
     assert.equal(c.phase, 'idle', text);
     assert.equal(c.stableState, CATALOG[type].nextState, text);
-    assert.equal(c.plan.paletteFamily, palette, 'closure does not restore a previous scene color');
+    assert.equal(c.plan.responseType, 'idle', 'the complete response returns to the basic lamp');
+    assert.deepEqual(r.colors, [[255,255,255]], 'closure returns neutral white rather than retaining a scene palette');
   }
   assert.equal(requests(), examples.length);
 });
@@ -108,9 +109,10 @@ test('a real pending HTTP plan carries the current field through receipt and thi
   assert.equal(c.plan.colorCount, 4);
   assert.equal(c.plan.durationMs, 12000);
   assert.equal(c.plan.loop, false);
-  assert.equal(c.plan.nextState, 'hold');
+  assert.equal(c.plan.nextState, 'idle');
   r.finish();
-  assert.equal(c.stableState, 'hold');
+  assert.equal(c.stableState, 'idle');
+  assert.deepEqual(r.colors, [[255,255,255]]);
   assert.equal(c.phase, 'idle');
 });
 
@@ -136,7 +138,8 @@ test('temporary color changes yield to the next joyful or difficult sharing with
     assert.equal(c.plan.paletteFamily, family);
     assert.equal(c.preferences.lockedPalette, null);
     r.finish();
-    assert.equal(c.plan.paletteFamily, family);
+    assert.equal(c.plan.responseType, 'idle');
+    assert.deepEqual(r.colors, [[255,255,255]]);
   }
   assert.equal(requests(), 2, 'the direct hue request bypasses AI, both later scenes use the HTTP planner');
 });
@@ -183,5 +186,5 @@ test('explicit company is the rest scene with an ongoing state; ordinary fatigue
   renderer.finish();
   assert.equal(c.plan.responseType, 'rest');
   assert.equal(c.plan.loop, false);
-  assert.equal(c.plan.nextState, 'hold');
+  assert.equal(c.plan.nextState, 'idle');
 });

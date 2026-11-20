@@ -75,7 +75,7 @@ function gradientColor(palette,position,balance,avoidedSegments=[],{travel=0,rip
 // smoothly through the existing white light surface instead of introducing a
 // gray seam, snapping to another hue, or painting a hard white pixel mask.
 const HUE_SPANS = {red:[345,375],orange:[15,45],yellow:[45,75],green:[75,170],blue:[170,255],purple:[255,290],pink:[290,345]};
-function respectDeclinedHues(rgb,avoidedColors) {
+function respectDeclinedHues(rgb,avoidedColors,background=255) {
   const high=Math.max(...rgb),low=Math.min(...rgb),chroma=high-low;
   if(chroma<=12)return rgb;
   const [r,g,b]=rgb;
@@ -89,7 +89,7 @@ function respectDeclinedHues(rgb,avoidedColors) {
   }
   if(distance>=12)return rgb;
   const shoulder=1-ease(distance/12),keep=1-shoulder*(1-12/chroma);
-  return rgb.map(channel=>mix(255,channel,keep));
+  return rgb.map(channel=>mix(background,channel,keep));
 }
 
 function restingFields(scene,phase=0,amplitude=.25,strength=.85) {
@@ -270,21 +270,21 @@ function responseScene({type,expression,p,clock,phase,amp,energy,speed,loop,acce
   switch(type) {
     case 'greet': {
       const emerge=ease(p/.38),breathe=Math.sin(clock*1.9+phase)*amp*.018*finiteMotion;
-      const radius=.105+emerge*.105+breathe;
-      addField(scene,.455+Math.sin(clock+phase)*amp*.024*finiteMotion,.435,radius,radius*1.16,0,base*(.38+emerge*.62));
-      addField(scene,.555,.48+Math.cos(clock*.8+phase)*amp*.027*finiteMotion,radius*.96,radius*.91,1,base*.9*emerge);
+      const radius=(.105+emerge*.105+breathe)*1.2;
+      addField(scene,.455+Math.sin(clock+phase)*amp*.045*finiteMotion,.435,radius,radius*1.16,0,base*(.38+emerge*.62));
+      addField(scene,.555,.48+Math.cos(clock*.8+phase)*amp*.045*finiteMotion,radius*.96,radius*.91,1,base*.9*emerge);
       addField(scene,.49,.53,radius*1.15,radius*.7,2,base*.35*emerge);
       return scene;
     }
     case 'acknowledge': {
       // One listening cloud gives a gentle nod. Its two closely overlapping
       // color lobes are already the two lights that can separate into thinking.
-      const nod=Math.sin(Math.PI*p)**2,spread=nod*amp*.07;
-      const x=.5,y=.465-Math.sin(Math.PI*p)*amp*.028;
+      const nod=Math.sin(Math.PI*p)**2,spread=nod*amp*.1;
+      const x=.5,y=.465-Math.sin(Math.PI*p)*amp*.04;
       addField(scene,x-.025,y,.205+spread,.225+spread,0,base*(.62+nod*.38));
       addField(scene,x+.035,y+.02,.205+spread,.21+spread,1,base*(.58+nod*.26));
       addField(scene,x,y+.025,.27+spread,.245+spread,2,base*.23);
-      addRing(scene,x,y,.035+open*(.33+amp*.1),.095,1,base*.35*Math.sin(Math.PI*p));
+      addRing(scene,x,y,.035+open*(.33+amp*.13),.1,1,base*.42*Math.sin(Math.PI*p));
       return scene;
     }
     case 'processing': {
@@ -293,9 +293,9 @@ function responseScene({type,expression,p,clock,phase,amp,energy,speed,loop,acce
       const anchors=processingAnchors(clock,phase,amp);
       for(let i=0;i<anchors.length;i++) {
         const {x,y}=anchors[i],color=i===0?0:2;
-        addField(scene,x,y,.182,.19,color,base*1.24);
-        addField(scene,x-.018,y-.018,.115,.12,1,base*.48);
-        addField(scene,x,y,.255,.26,color,base*.19);
+        addField(scene,x,y,.2,.209,color,base*1.24);
+        addField(scene,x-.018,y-.018,.1265,.132,1,base*.48);
+        addField(scene,x,y,.2805,.286,color,base*.19);
       }
       return scene;
     }
@@ -313,9 +313,9 @@ function responseScene({type,expression,p,clock,phase,amp,energy,speed,loop,acce
     }
     case 'farewell': {
       const gather=ease(p/.64),ambient=ease((p-.58)/.42);
-      addField(scene,mix(mix(.2,.47,gather),.04,ambient),mix(.4,.56,gather),mix(.25,.36,ambient),mix(.27,.39,ambient),0,base*.8);
-      addField(scene,mix(mix(.8,.53,gather),.98,ambient),mix(.68,.56,gather),mix(.25,.35,ambient),mix(.27,.4,ambient),1,base*.75);
-      addField(scene,.52,mix(.56,.92,ambient),.28,.2,2,base*(.3+.18*ambient));
+      addField(scene,mix(mix(.15,.47,gather),.015,ambient),mix(.36,.56,gather),mix(.275,.39,ambient),mix(.295,.42,ambient),0,base*.8);
+      addField(scene,mix(mix(.85,.53,gather),1.005,ambient),mix(.72,.56,gather),mix(.275,.38,ambient),mix(.295,.43,ambient),1,base*.75);
+      addField(scene,.52,mix(.56,.94,ambient),.3,.22,2,base*(.3+.18*ambient));
       return scene;
     }
     case 'celebrate': {
@@ -391,7 +391,7 @@ function responseScene({type,expression,p,clock,phase,amp,energy,speed,loop,acce
         // Gold gently enters the violet tide from the side, opens into warmth,
         // then leaves a quiet constellation. The opening never restarts.
         const warmth=ease((p-c.supportDelay)/.36),starStart=Math.max(.76,c.supportDelay+.36);
-        const stars=ease((p-starStart)/Math.min(.22,1-starStart)),resident=1-stars*.88;
+        const stars=ease((p-starStart)/Math.min(.22,1-starStart)),resident=1-stars;
         const warmGain=c.supportStrength*c.accentWeight;
         const t=clock*amp*.9+phase;
         addVeil(scene,1.12-warmth*.63,.56+Math.sin(t*.43)*amp*.035,(.1+warmth*.55)*c.accentScale,(.13+warmth*.25)*c.accentScale,-.28,2,base*.92*warmth*resident*warmGain);
@@ -540,6 +540,9 @@ export function renderFrame(plan = {}, elapsedMs = 0, {reducedMotion=false,color
   const amp=clamp(number(plan.amplitude,defaults.amplitude));
   const energy=clamp(number(plan.energy,defaults.energy));
   const primitive=MOTION_PRIMITIVES.includes(plan.motionPrimitive) ? plan.motionPrimitive : defaults.motionPrimitive;
+  // Availability is ordinary white light, independent of a preceding scene's
+  // pigments, saved seed, or color preferences. Manual non-idle holds stay intact.
+  if(type==='idle'&&primitive==='hold')return new Uint8ClampedArray(LED_SIZE*LED_SIZE*3).fill(255);
   const phase=phaseFor(number(plan.seed,0));
   // Ordinary finite motions hold their endpoint. Selected native responses
   // retain a continuing ambient tail while their finite opening runs only once.
@@ -560,6 +563,11 @@ export function renderFrame(plan = {}, elapsedMs = 0, {reducedMotion=false,color
     return Array.from({length:31},(_,j)=>(j+1)/32).some(p=>avoidedColors.includes(colorGroup(a.map((channel,c)=>mix(channel,b[c],p)))));
   }) : [];
   const native=primitive===defaults.motionPrimitive;
+  // The star ending belongs to the finite scene, rather than another animation
+  // painted on top of the matrix. Its neutral surface recedes into darkness so
+  // the remaining colored points read as light instead of pigment on white.
+  const stars=native&&((type==='celebrate'&&plan.expression!=='quiet')||(type==='setback'&&plan.expression==='renew'));
+  const background=stars?mix(255,8,ease((p-.76)/.22)):255;
   const composition=normalizeComposition(plan.composition);
   const composed=native ? responseScene({type,expression:plan.expression||'default',p,clock,phase,amp,energy,speed,loop,accentIndices,primaryCount,feelingBalance:number(plan.feelingBalance,.7),mixedMode:plan.mixedMode,composition}) : null;
   if(composed&&['celebrate','setback','rest','upcoming','mixed','everyday'].includes(type))adaptSceneGeometry(composed,composition);
@@ -660,9 +668,9 @@ export function renderFrame(plan = {}, elapsedMs = 0, {reducedMotion=false,color
       coverage*=1-contact**3*.3;
     }
     const index=(y*LED_SIZE+x)*3;
-    const emitted=[colorTotal?mix(255,r/colorTotal,coverage):255,
-      colorTotal?mix(255,g/colorTotal,coverage):255,colorTotal?mix(255,b/colorTotal,coverage):255];
-    const output=avoidedColors.length?respectDeclinedHues(emitted,avoidedColors):emitted;
+    const emitted=[colorTotal?mix(background,r/colorTotal,coverage):background,
+      colorTotal?mix(background,g/colorTotal,coverage):background,colorTotal?mix(background,b/colorTotal,coverage):background];
+    const output=avoidedColors.length?respectDeclinedHues(emitted,avoidedColors,background):emitted;
     frame[index]=output[0];frame[index+1]=output[1];frame[index+2]=output[2];
     if(avoidedColors.length) {
       // Uint8 rounding can move a nearly neutral shoulder pixel back across a
@@ -670,7 +678,7 @@ export function renderFrame(plan = {}, elapsedMs = 0, {reducedMotion=false,color
       const emitted=[frame[index],frame[index+1],frame[index+2]],group=colorGroup(emitted);
       if(group!=='neutral'&&avoidedColors.includes(group)) {
         const keep=12/(Math.max(...emitted)-Math.min(...emitted));
-        for(let channel=0;channel<3;channel++)frame[index+channel]=mix(255,emitted[channel],keep);
+        for(let channel=0;channel<3;channel++)frame[index+channel]=mix(background,emitted[channel],keep);
       }
     }
   }
@@ -752,21 +760,23 @@ export class LightRenderer {
     if(this._voiceActive)return;
     this._lastNow=null;
     const voiceExit=Boolean(this._transition?.voice);
-    const duration=voiceExit ? 450 : this._reducedMotion ? 0 : clamp(number(plan.transitionMs,1500),0,5000);
     const fromType=voiceExit ? 'voice' : prior?.responseType;
+    const returning=!voiceExit&&!preserveProgress&&plan.responseType==='idle'&&plan.motionPrimitive==='hold'
+      &&['celebrate','setback','rest','upcoming','mixed','everyday'].includes(fromType);
+    const duration=this._reducedMotion ? 0 : voiceExit ? 240 : returning ? clamp(number(plan.transitionMs,2000),1800,2200) : clamp(number(plan.transitionMs,1500),0,5000);
     const flowing=['voice','greet','acknowledge','processing'].includes(fromType)
       &&['acknowledge','processing','clarify','farewell','celebrate','setback','rest','upcoming','mixed','everyday'].includes(plan.responseType)
       &&plan.motionPrimitive===CATALOG[plan.responseType]?.motionPrimitive&&!preserveProgress;
     let source;
-    if(flowing) {
+    if(flowing||returning) {
       const phase=phaseFor(number(prior?.seed,0)),amp=clamp(number(prior?.amplitude,.58));
       const offset={x:Math.sin(phase)*.055,y:Math.cos(phase*.79)*.045};
-      const anchors=fromType==='processing'
+      const anchors=returning ? [] : fromType==='processing'
         ? processingAnchors(priorElapsed/1000*number(prior?.speed,.9),phase,amp).map(point=>({x:point.x+offset.x,y:point.y+offset.y}))
         : [{x:.475+(voiceExit?0:offset.x),y:.45+(voiceExit?0:offset.y)},{x:.535+(voiceExit?0:offset.x),y:.475+(voiceExit?0:offset.y)}];
       source={plan:prior,elapsed:priorElapsed,colors:priorColors,accentColors:priorAccents,avoidedColors:priorAvoided,anchors,voice:voiceExit,voiceElapsed:this._voiceElapsed,voiceLevel:this._voiceLevel};
     }
-    this._transition=(prior||voiceExit)&&duration>0 ? {from,duration,elapsed:0,...(voiceExit?{voice:true}:{}),...(source?{source}:{})} : null;
+    this._transition=(prior||voiceExit)&&duration>0 ? {from,duration,elapsed:0,...(voiceExit?{voice:true}:{}),...(returning?{returnToIdle:true}:{}),...(source?{source}:{})} : null;
     if(paint){this._compose();this._paint();}
   }
   setVoiceInput({active=false,level=0}={}) {
@@ -781,7 +791,7 @@ export class LightRenderer {
   }
   _applyVoiceInput({active,level}) {
     if(active!==this._voiceActive) {
-      this._transition={from:this._frame.slice(),duration:450,elapsed:0,voice:true};
+      this._transition={from:this._frame.slice(),duration:active?300:240,elapsed:0,voice:true};
       this._lastNow=null;
       if(active)this._voiceElapsed=0;
     }
@@ -817,6 +827,9 @@ export class LightRenderer {
   }
   _compose() {
     if(!this._plan&&!this._voiceActive&&!this._transition)return;
+    // A preference changed during a pause takes effect on the first resumed
+    // paint too; it must not leave an old dim/rise transition running.
+    if(this._reducedMotion&&this._transition?.returnToIdle)this._transition=null;
     const transition=this._transition;
     const progress=transition ? ease(transition.elapsed/transition.duration) : 1;
     const handoff=transition?.source&&!this._voiceActive ? {anchors:transition.source.anchors,progress} : undefined;
@@ -834,7 +847,13 @@ export class LightRenderer {
         const release=ease(transition.elapsed/180);
         source=live.map((value,index)=>mix(transition.from[index],value,release));
       }
-      this._frame=target.map((value,index)=>mix(source[index],value,progress));
+      if(transition.returnToIdle) {
+        const phase=clamp(transition.elapsed/transition.duration),dip=.12;
+        // Keep moving outgoing light, gently lower it, then let ordinary white
+        // light rise. A dark star field keeps darkening first: no white preflash.
+        this._frame=phase<.45 ? source.map(value=>value*mix(1,dip,ease(phase/.45)))
+          : source.map(value=>mix(value*dip,255,ease((phase-.45)/.55)));
+      } else this._frame=target.map((value,index)=>mix(source[index],value,progress));
       if(progress>=1)this._transition=null;
     } else this._frame=target;
     this._voiceDirty=false;

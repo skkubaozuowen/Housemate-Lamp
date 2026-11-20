@@ -78,7 +78,11 @@ export function setupResearch(controller, renderer, { aiAvailable = false, simul
     const expressions = EXPRESSIONS.filter(value => createScenePlan(plan.responseType, value).expression === value);
     $('expression').replaceChildren(...expressions.map(value => option(value, labels[value])));
     for (const [key, id] of Object.entries(fieldMap)) $(id).value = ['durationMs', 'transitionMs'].includes(key) ? plan[key] / 1000 : key === 'expression' && plan.responseType === 'upcoming' ? 'default' : plan[key];
+    const finiteSituation = SCENE_TYPES.includes(plan.responseType) && plan.nextState !== 'accompany';
+    $('duration').min = finiteSituation ? 10 : .4;
+    $('duration').max = finiteSituation ? 15 : 20;
     $('loop').checked = plan.loop;
+    $('loop').disabled = finiteSituation;
     for (const key of ['energy','amplitude','speed']) $(`${key}-output`).value = Number(plan[key]).toFixed(2);
     const composition = normalizeComposition(plan.composition);
     for (const key of compositionFields) {
@@ -120,7 +124,7 @@ export function setupResearch(controller, renderer, { aiAvailable = false, simul
     writeControls(draftPlan);
     notify('Expression defaults loaded. Preview to play, or adjust the light first.');
   });
-  form.addEventListener('submit', e => { e.preventDefault(); draftTouched = true; draftPlan = readControls(); controller.preview(draftPlan); notify('Previewing this study.'); });
+  form.addEventListener('submit', e => { e.preventDefault(); draftTouched = true; draftPlan = readControls(); writeControls(draftPlan); controller.preview(draftPlan); notify('Previewing this study.'); });
   // Edits update their numeric readout; only an explicit preview starts a scene.
   for (const key of ['energy','amplitude','speed']) $(key).addEventListener('input', () => { $(`${key}-output`).value = Number($(key).value).toFixed(2); });
   $('use-current').addEventListener('click', () => { draftTouched = true; draftPlan = controller.plan; selectedType = draftPlan.responseType; writeControls(draftPlan); controller.emit(); notify('Current light copied into the study controls.'); });
@@ -163,7 +167,7 @@ export function setupResearch(controller, renderer, { aiAvailable = false, simul
     $('plan-json').textContent = JSON.stringify(state.plan, null, 2);
     if (renderedPlan !== state.plan) {
       if (!draftTouched) { selectedType = state.plan.responseType; draftPlan = state.plan; writeControls(draftPlan); }
-      const colors = selectPalette(state.plan, state.preferences);
+      const colors = controller.rendering?.colors || selectPalette(state.plan, state.preferences);
       $('swatches').replaceChildren(...colors.map(rgb => { const swatch=document.createElement('span'); swatch.style.backgroundColor=`rgb(${rgb.join(',')})`; return swatch; }));
       renderedPlan = state.plan;
     }

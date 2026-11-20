@@ -426,9 +426,9 @@ test('setbacks retain violet and rose unless trying again explicitly invites the
     assert.equal(plan.expression, 'renew', text);
     assert.equal(plan.paletteFamily, 'renewal_gold', text);
     assert.equal(plan.colorCount, 4, text);
-    assert.equal(plan.durationMs, 12000, 'the finite gesture leaves time for violet, entering yellow and the warm finish');
+    assert.equal(plan.durationMs, 14000, 'the finite gesture leaves time for violet, entering yellow and the warm finish');
     assert.equal(plan.loop, false, 'the warming gesture does not restart');
-    assert.equal(plan.nextState, 'hold', 'the warm finish remains available for its ambient stars');
+    assert.equal(plan.nextState, 'idle', 'the finite warm response returns to ordinary white idle');
   }
   assert.deepEqual(PALETTE_FAMILIES.renewal_gold.colors.slice(0,2), PALETTE_FAMILIES.dusk_indigo.colors.slice(0,2), 'renewal begins in the same violet family as an ordinary setback');
 });

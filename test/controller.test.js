@@ -138,7 +138,7 @@ test('color repair replaces a kept palette through closure; a later AI emotion u
   assert.equal(c.plan.paletteFamily,'apricot_rose');
   assert.equal(c.preferences.lockedPalette,null);
   assert.deepEqual(r.colors,selectPalette(c.plan,c.preferences));
-  r.finish(); assert.equal(c.plan.paletteFamily,'apricot_rose');
+  r.finish(); assert.equal(c.plan.responseType,'idle'); assert.deepEqual(r.colors,[[255,255,255]]);
   c.reset(); assert.deepEqual(c.preferences.rejectedPalettes,[]); assert.equal(c.preferences.lockedPalette,null);
 });
 
@@ -159,7 +159,7 @@ test('a requested demo color survives settling and small follow-ups, then yields
   assert.equal(c.plan.responseType,'celebrate'); assert.equal(c.plan.paletteFamily,'apricot_rose');
   assert.equal(c.preferences.lockedPalette,null);
   assert.deepEqual(r.colors,selectPalette(c.plan,c.preferences));
-  r.finish(); assert.equal(c.phase,'idle'); assert.equal(c.plan.paletteFamily,'apricot_rose');
+  r.finish(); assert.equal(c.phase,'idle'); assert.equal(c.plan.responseType,'idle'); assert.deepEqual(r.colors,[[255,255,255]]);
 });
 
 test('only explicit keep carries a requested color into new emotions; another named color releases it', async () => {
@@ -171,14 +171,14 @@ test('only explicit keep carries a requested color into new emotions; another na
   await c.submit('我很开心'); r.finish();
   assert.equal(c.plan.responseType,'celebrate'); assert.equal(c.plan.paletteFamily,'named_blue');
   assert.ok(r.colors.every(color=>colorGroup(color)==='blue'));
-  r.finish(); assert.equal(c.plan.paletteFamily,'named_blue');
+  r.finish(); assert.equal(c.plan.responseType,'idle'); assert.equal(c.preferences.lockedPalette.paletteFamily,'named_blue');
   await c.submit('换成粉色');
   assert.equal(c.plan.responseType,'repair'); assert.equal(c.plan.paletteFamily,'named_pink');
   assert.equal(c.preferences.lockedPalette,null,'a new named request releases the previous explicit lock');
   r.finish(); assert.equal(c.plan.paletteFamily,'named_pink');
   await c.submit('我很开心'); r.finish();
   assert.equal(c.plan.responseType,'celebrate'); assert.equal(c.plan.paletteFamily,'apricot_rose');
-  r.finish(); assert.equal(c.plan.paletteFamily,'apricot_rose');
+  r.finish(); assert.equal(c.plan.responseType,'idle'); assert.deepEqual(r.colors,[[255,255,255]]);
 });
 
 test('latest color correction aborts an older AI response before it can restore old colors', async () => {
@@ -266,7 +266,7 @@ test('scene exports contain exact main and accent colors without the private con
 });
 
 
-test('native ambient responses retain their animation after the finite introduction', async () => {
+test('native situation responses return to white basic light after their complete expression', async () => {
   for(const [text,type] of [
     ['今天很开心，终于完成了！','celebrate'],
     ['今天生日，我很开心，同时也有点孤单。','mixed'],
@@ -285,30 +285,33 @@ test('native ambient responses retain their animation after the finite introduct
     const calls=r.calls.length;
     r.finish();
     assert.equal(c.phase,'idle');
-    assert.equal(c.stableState,'hold');
-    assert.equal(c.plan.responseType,type);
-    assert.equal(c.stablePlan.responseType,type);
-    assert.equal(c.stablePlan.motionPrimitive,original.motionPrimitive,'tail keeps the native scene rather than a static hold');
-    assert.ok(c.stablePlan.energy>0);
-    assert.ok(c.stablePlan.amplitude>0);
-    assert.equal(r.calls.length,calls,'completing the introduction does not restart the renderer clock');
-    assert.equal(r.elapsed,original.durationMs);
+    assert.equal(c.stableState,'idle');
+    assert.equal(c.plan.responseType,'idle');
+    assert.equal(c.stablePlan.responseType,'idle');
+    assert.equal(c.stablePlan.motionPrimitive,'hold');
+    assert.equal(c.stablePlan.energy,0);
+    assert.equal(c.stablePlan.amplitude,0);
+    assert.deepEqual(r.colors,[[255,255,255]]);
+    assert.equal(r.calls.length,calls+1,'completion starts one return to the basic lamp');
+    assert.equal(c.plan.transitionMs,2000);
     r.elapsed+=4500;
     c.setMode('ai');
-    assert.equal(c.stablePlan.responseType,type);
-    assert.equal(r.plan.motionPrimitive,original.motionPrimitive);
-    assert.equal(r.elapsed,original.durationMs+4500,'switching AI/demo preserves the tail instead of replaying its introduction');
+    assert.equal(c.stablePlan.responseType,'idle');
+    assert.equal(r.plan.motionPrimitive,'hold');
+    assert.equal(r.elapsed,0,'switching AI/demo does not replay a completed scene');
     c.setMode('demo');
-    assert.equal(r.elapsed,original.durationMs+4500);
+    assert.equal(r.elapsed,0);
   }
 });
 
-test('quiet celebration finishes in stillness rather than acquiring the vivid celebration tail', async () => {
+test('quiet celebration also returns to the white basic lamp', async () => {
   const {controller:c,renderer:r}=session();
   c.preview(createPlan('celebrate',{expression:'quiet'}));
   r.finish();
   assert.equal(c.stablePlan.motionPrimitive,'hold');
   assert.equal(c.stablePlan.energy,0);
+  assert.equal(c.plan.responseType,'idle');
+  assert.deepEqual(r.colors,[[255,255,255]]);
   assert.deepEqual(r.accentColors,[]);
 });
 

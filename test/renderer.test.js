@@ -18,7 +18,8 @@ test('current repertoire and legacy scenes produce deterministic, bounded 16×16
     assert.deepEqual(frame,renderFrame(plan,at),`${type} reproducibility`);
     assert.ok(frame.every(Number.isFinite),type);
     assert.ok(Math.min(...frame)>=100,`${type} keeps the bright diffuse language`);
-    assert.ok(Math.max(...frame)-Math.min(...frame)>8,`${type} retains spatial color contrast`);
+    if(type==='idle')assert.ok(frame.every(value=>value===255),'idle is ordinary uniform white light');
+    else assert.ok(Math.max(...frame)-Math.min(...frame)>8,`${type} retains spatial color contrast`);
   }
 });
 

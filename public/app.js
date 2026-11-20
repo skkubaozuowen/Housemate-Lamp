@@ -9,7 +9,23 @@ const $ = id => document.getElementById(id);
 const input = $('question');
 const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
 let hardware = null;
-const renderer = new LightRenderer($('light'), { gridCanvas: $('grid'), onFrame:frame => hardware?.offer(frame) });
+let lightDark = false;
+function updateLightContrast(frame) {
+  if (!frame?.length || frame.length % 3) return;
+  let brightness = 0;
+  for (let i = 0; i < frame.length; i += 3) brightness += frame[i] * .2126 + frame[i + 1] * .7152 + frame[i + 2] * .0722;
+  brightness /= frame.length / 3;
+  // Follow the visible crossfade, including a paused frame. Separate thresholds
+  // keep a few twinkling pixels from repeatedly changing the text treatment.
+  const dark = brightness < (lightDark ? 144 : 116);
+  if (dark === lightDark) return;
+  lightDark = dark;
+  document.body.classList.toggle('light-dark', dark);
+}
+const renderer = new LightRenderer($('light'), { gridCanvas: $('grid'), onFrame:frame => {
+  updateLightContrast(frame);
+  hardware?.offer(frame);
+} });
 hardware = setupHardware(renderer);
 renderer.setReducedMotion(motionQuery.matches);
 motionQuery.addEventListener('change', e => renderer.setReducedMotion(e.matches));
