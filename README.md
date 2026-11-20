@@ -98,6 +98,21 @@ Between exchanges the lamp is a steady, neutral white field using the same 768-b
 
 All eleven ordinary S01–S06 expressions play for 10–15 seconds, including their finishing motion. Their completion starts a two-second dissolve: the outgoing color fields keep moving while their contrast gradually fades into steady white, without a whole-lamp dimming stage. S01 celebration and S02 support retain the original soft white ground beneath their finishing stars; S02 also retains a faint warm resident glow. Paused time, hidden time and active voice input do not advance the underlying response clock. New speech, reset or a boundary can replace an outgoing fade without a later stale callback restoring it. Kept/declined color preferences remain available for the next expression, while the ordinary between-turn lamp stays white. Explicit manual Hold, color corrections and invited ongoing company retain their separate behavior.
 
+## Perceptible degrees within each response · version 3.11
+
+The model now chooses a separate `intensity` from 0 to 1 before tuning the existing composition. Low, medium and strong reference regions provide visible spacing between degrees of the same expression. A small set of family-specific dimensions is anchored to that degree, while secondary geometry, motion, support timing and palette variation retain contextual choices. The interpretation is applied once on the server; saved scenes and manual studies replay their resulting settings without applying it again. Older plans default to .5. Library previews and Local demo retain the reference compositions.
+
+| Family | Main visible degree changes |
+| --- | --- |
+| S01 | Opening size, ripple thickness/count and star size; quiet satisfaction keeps its quiet unfolding |
+| S02 | Wave thickness, occupied area and receiving glows; support remains a separate contextual choice |
+| S03 | A broader resting field and slower settling; fulfilment retains its independent warm accent |
+| S04 | A larger receiving and breathing field, with encouragement timing chosen independently |
+| S05 | Broader color presence; layered gradients vary ribbon thickness at the same period, retaining the supported feelings |
+| S06 | Size and spacing of the acknowledgment and two resident glows, without inventing an emotion |
+
+Degree does not raise USB brightness or make every response faster. Current hue preferences, finite timing and the direct dissolve into white remain in use. The research drawer's current-plan JSON and exports include `intensity`; Use current light captures the actual orchestrated settings.
+
 ## Contextual orchestration · version 3.9
 
 The six situation families and their eleven contextual expressions now provide a visual vocabulary that the LLM can orchestrate for a particular utterance. The model's bounded speed, chromatic energy, movement amplitude, duration and transition values reach the renderer, together with a `composition` object: field size, spread, elongation, wave width/count, ripple count, spot count, accent size/presence, appearance spacing and support entry/strength. Only parameters meaningful to the chosen expression affect it. `stagger` controls spacing inside an animation; `transitionMs` remains the handoff between responses. The model may also choose an existing misted, balanced or accented palette variation; the family and basic color budget continue to come from the situation framework.

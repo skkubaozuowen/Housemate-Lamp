@@ -3,7 +3,7 @@ import { COMPOSITION_SCHEMA, normalizeComposition, validateComposition } from '.
 import { PALETTE_FAMILIES, PALETTE_VARIANTS, NAMED_COLOR_FAMILIES, isPaletteAllowed, isSemanticMixedPalette, resolvePaletteFamily, replacementPalette } from './palettes.js';
 
 export const PLAN_LIMITS = Object.freeze({
-  colorCount: [1, 4], energy: [0, 1], speed: [0.05, 2], amplitude: [0, 1],
+  colorCount: [1, 4], intensity: [0, 1], energy: [0, 1], speed: [0.05, 2], amplitude: [0, 1],
   durationMs: [400, 20000], transitionMs: [150, 5000], seed: [0, 4294967295], feelingBalance: [.5, .9]
 });
 export const FEELING_TYPES = Object.freeze(['joy', 'sadness', 'calm', 'anxiety', 'hope', 'anger']);
@@ -38,13 +38,14 @@ export function normalizePlan(raw, fallback = null) {
   // Old saved plans did not contain composition; their valid fallback values
   // remain usable while all new strict model output includes the nested object.
   const fallbackPlan = fallback && typeof fallback === 'object' && !Array.isArray(fallback)
-    ? { ...fallback, composition:normalizeComposition(fallback.composition) } : null;
+    ? { intensity:SCENE_RESPONSE_TYPES.includes(fallback.responseType) ? .5 : 0, ...fallback, composition:normalizeComposition(fallback.composition) } : null;
   const base = { ...createPlan(type), ...(validatePlan(fallbackPlan) ? fallbackPlan : {}) };
   const result = { version: 1 };
   for (const [key, values] of Object.entries(ENUM_FIELDS)) result[key] = values.includes(candidate[key]) ? candidate[key] : base[key];
   for (const key of Object.keys(PLAN_LIMITS)) result[key] = inRange(candidate[key], key) ? candidate[key] : base[key];
   for (const key of ['loop', 'requiresUserInput']) result[key] = typeof candidate[key] === 'boolean' ? candidate[key] : base[key];
   result.composition = normalizeComposition(candidate.composition, base.composition);
+  if(!SCENE_RESPONSE_TYPES.includes(type))result.intensity=0;
   if (type === 'mixed' && (result.feelingSecondary === 'none' || result.feelingSecondary === result.feelingPrimary)) result.feelingSecondary = result.feelingPrimary === 'sadness' ? 'joy' : 'sadness';
   if (result.mixedMode !== 'layered' || [result.feelingPrimary, result.feelingSecondary].includes(result.feelingTertiary)) result.feelingTertiary = 'none';
   if (result.mixedMode === 'layered' && result.feelingTertiary === 'none') result.mixedMode = 'paired';

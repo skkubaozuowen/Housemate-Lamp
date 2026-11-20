@@ -264,7 +264,7 @@ function processingAnchors(clock,phase,amp) {
   return [0,1].map(i=>({x:.5+Math.cos(angle+i*Math.PI)*orbit,y:.49+Math.sin(angle+i*Math.PI)*orbit}));
 }
 
-function responseScene({type,expression,p,clock,phase,amp,energy,speed,loop,accentIndices,primaryCount,feelingBalance,mixedMode,composition}) {
+function responseScene({type,expression,p,clock,phase,amp,energy,speed,loop,accentIndices,primaryCount,feelingBalance,mixedMode,composition,intensity=.5}) {
   const scene=[],base=.58+energy*.92,open=ease(p),finiteMotion=Math.sin(Math.PI*p)**2;
   const c=composition;
   switch(type) {
@@ -451,6 +451,10 @@ function responseScene({type,expression,p,clock,phase,amp,energy,speed,loop,acce
       // fragments become gently bending color ribbons with clean white gaps.
       // These continuous fields replace separate, heavily overlapping balls.
       const mode=['paired','layered','open'].includes(mixedMode)?mixedMode:'paired';
+      // Emotional degree widens the existing ribbons, rather than adding a
+      // feeling or changing their period. The original midpoint stays exact.
+      const crestPower=intensity===.5 ? 2.2 : intensity<.5
+        ? mix(5.8,2.2,ease(intensity/.5)) : mix(2.2,.9,ease((intensity-.5)/.5));
       const unfold=ease(p/.24),tail=1-.2*ease((p-.65)/.35);
       const t=clock*amp*.85+phase,motion=amp*tail;
       const breath=.94+Math.sin(t*.71)*motion*.065;
@@ -459,7 +463,7 @@ function responseScene({type,expression,p,clock,phase,amp,energy,speed,loop,acce
         angle:mode==='layered' ? Math.sin(t*.19)*motion*.085 : .595+Math.sin(t*.23)*motion*.08,
         shift:mode==='open'?0:Math.sin(t*.79)*motion*.025,curve:Math.sin(t*.51)*motion*.065*c.waveWidth,weaveScale:c.waveWidth,
         colorTravel:clock*amp*.18,colorRipple:mode==='open'?0:motion*.12*c.waveWidth,
-        flow:t,balance:mode==='open'?undefined:clamp(feelingBalance,.5,.9),color:0,region:0,
+        flow:t,crestPower,balance:mode==='open'?undefined:clamp(feelingBalance,.5,.9),color:0,region:0,
         strength:base*(.53+.29*unfold)*(mode==='layered'?.87:1)*(1+Math.sin(t*.67)*motion*.075)});
       if(mode==='layered')for(let i=0;i<3;i++) {
         const glimmer=(.5+.5*Math.sin(t*(.71+i*.17)+i*2.1*c.stagger))**4;
@@ -566,7 +570,7 @@ export function renderFrame(plan = {}, elapsedMs = 0, {reducedMotion=false,color
   // Keep the original luminous surface beneath the colored finishing points.
   const background=255;
   const composition=normalizeComposition(plan.composition);
-  const composed=native ? responseScene({type,expression:plan.expression||'default',p,clock,phase,amp,energy,speed,loop,accentIndices,primaryCount,feelingBalance:number(plan.feelingBalance,.7),mixedMode:plan.mixedMode,composition}) : null;
+  const composed=native ? responseScene({type,expression:plan.expression||'default',p,clock,phase,amp,energy,speed,loop,accentIndices,primaryCount,feelingBalance:number(plan.feelingBalance,.7),mixedMode:plan.mixedMode,composition,intensity:clamp(number(plan.intensity,.5))}) : null;
   if(composed&&['celebrate','setback','rest','upcoming','mixed','everyday'].includes(type))adaptSceneGeometry(composed,composition);
   const scene=composed||primitiveScene(staticPrimitive,{p,clock,phase,amp,energy,type});
   const luminousJoin=Boolean(composed)&&(type==='upcoming'||type==='setback'&&plan.expression==='renew');
@@ -603,7 +607,7 @@ export function renderFrame(plan = {}, elapsedMs = 0, {reducedMotion=false,color
         const radius=((u+bend)/shape.rx)**2+(v/shape.ry)**2;
         if(shape.mode==='layered') {
           const crest=.5+.5*Math.cos((u+bend)/(.29*3*(shape.weaveScale??1))*TAU-shape.flow*.55);
-          weight=crest**2.2*Math.exp(-((v/(shape.ry*2.7))**4)*.2);
+          weight=crest**shape.crestPower*Math.exp(-((v/(shape.ry*2.7))**4)*.2);
         } else weight=Math.exp(-(radius**1.13)*.8);
         color=gradientColor(palette,(u+bend)/(shape.mode==='layered'?.73:shape.mode==='open'?.74:.89)+.5+shape.shift,shape.balance,avoidedSegments,
           {travel:shape.colorTravel,ripple:shape.colorRipple,cycle:shape.mode==='open'});

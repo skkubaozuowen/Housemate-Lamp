@@ -50,10 +50,12 @@ test('the nested strict schema rejects unknown, missing, fractional-count and no
 });
 
 test('real model orchestration survives profile construction without replacing the scene language', async () => {
-  const proposed=createPlan('setback',{ seed:88, energy:.61, speed:.48, amplitude:.81, durationMs:12500, transitionMs:1300, composition:customComposition(), paletteFamily:'named_blue',motionPrimitive:'hold',loop:true,nextState:'withdraw' });
+  const proposed=createPlan('setback',{ seed:88, intensity:.8, energy:.61, speed:.48, amplitude:.81, durationMs:12500, transitionMs:1300, composition:customComposition(), paletteFamily:'named_blue',motionPrimitive:'hold',loop:true,nextState:'withdraw' });
   const {plan,request}=await remote('我很难过，事情没有成功',proposed);
-  for(const key of ['energy','speed','amplitude','durationMs','transitionMs','seed']) assert.equal(plan[key],proposed[key],key);
-  assert.deepEqual(plan.composition,proposed.composition);
+  for(const key of ['intensity','speed','amplitude','durationMs','transitionMs','seed']) assert.equal(plan[key],proposed[key],key);
+  assert.ok(plan.energy>=.6&&plan.energy<=.68,'a strong receiving response keeps a visible but bounded color presence');
+  for(const key of ['fieldScale','waveWidth','accentScale'])assert.ok(plan.composition[key]>proposed.composition[key],`${key} expresses the strong visual degree`);
+  for(const key of ['spread','waveCount','rippleCount','spotCount','stagger','supportDelay','supportStrength','elongation'])assert.equal(plan.composition[key],proposed.composition[key],`${key} retains the model's contextual orchestration`);
   assert.equal(plan.paletteFamily,'dusk_indigo');
   assert.equal(plan.motionPrimitive,CATALOG.setback.motionPrimitive);
   assert.equal(plan.loop,false);
@@ -84,7 +86,7 @@ test('S02 may support after receiving distress without a retry phrase, but a dec
   assert.equal(plan.expression,'renew');
   assert.equal(plan.paletteFamily,'renewal_gold');
   assert.equal(plan.speed,.29,'distress need not become fast');
-  assert.equal(plan.energy,.4,'support need not become high energy');
+  assert.ok(plan.energy<.55,'support need not become high energy');
   assert.equal(plan.composition.supportDelay,.4);
   for(const text of ['我很难过，只想你听我说','I feel sad. Just listen, do not encourage me.']) {
     const declined=await remote(text,createScenePlan('setback','renew'));
@@ -120,7 +122,9 @@ test('recognized family boundaries and mixed feeling evidence survive a differen
 test('globally valid scene extremes are clamped to a native aesthetic envelope, invalid bounds are rejected', async () => {
   const proposed=createPlan('rest',{energy:1,speed:2,amplitude:1,durationMs:400,transitionMs:150,composition:customComposition()});
   const {plan}=await remote('今天真的很累',proposed);
-  assert.deepEqual([plan.energy,plan.speed,plan.amplitude,plan.durationMs,plan.transitionMs],[.58,.46,.9,10000,900]);
+  assert.ok(plan.energy>=.22&&plan.energy<=.58);
+  assert.ok(plan.speed>=.15&&plan.speed<=.46);
+  assert.deepEqual([plan.amplitude,plan.durationMs,plan.transitionMs],[.9,10000,900]);
   assert.equal(plan.composition.spotCount,5);
   for(const update of [{speed:2.1},{composition:{...proposed.composition,waveCount:5}},{composition:{...proposed.composition,stagger:NaN}}]) {
     const bad=await remote('今天真的很累',{...proposed,...update});

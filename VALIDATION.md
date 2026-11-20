@@ -1,5 +1,15 @@
 # Prototype validation
 
+## Visible degrees across the six situation families · 2026-11-20 · v3.11.0
+
+Independent complete suite: **339 passed, 0 failed**. `git diff --check` passed.
+
+- Added a separate bounded `intensity` to the strict plan protocol, with .5 compatibility for saved situation plans and zero for exchange/manual states. The model reads degree from the full disclosure; server orchestration anchors a few visible dimensions while retaining secondary controls. This mapping runs once, before user preferences. Saved exports and restored scenes keep their actual RGB output.
+- S01 changes opening/ripple/star presence while quiet recognition stays quiet. S02 changes wave width, area and receiving-glow size without using degree alone to choose warm support. S03 broadens and slows the resting field while retaining the fulfilment branch. S04 scales receiving/breathing light without mechanically accelerating encouragement. S05 preserves its feeling identities, count and balance; layered ribbons change thickness at a fixed period. S06 varies acknowledgment presence without inventing emotion. The 10–15-second scene intervals, direct white dissolve, voice behavior and hardware cap are unchanged.
+- Twenty-three real configured local AI calls covered light/strong disclosures across all eleven expressions, plus the middle S02 example. All returned `source:ai` and the intended situation/variant. The three S02 examples returned intensity .28 / .64 / .92, field scale .868 / 1.088 / 1.243 and wave width .93 / 1.128 / 1.342. Two additional negated and past-versus-present examples retained light current degree (.27 / .28), despite containing strong words. Results remain local in ignored `tmp/intensity-live-all-expressions.json`.
+- Independent 8-fps probes used the actual gamma-2.6 curve, checked against the installed Adafruit table, and the existing brightness-three firmware quantization. Every expression retained differences between light, middle and strong levels; light-to-strong pairs changed an average of 81.6–225.1 of the 256 pixels. Layered ribbon tests separately retain the same ridge locations and demonstrate wider coverage even with locked colors. These are software/transport checks, rather than photometric measurements.
+- The local service was reloaded once and the current browser page was reconnected to the actual Arduino. The visible page showed `USB lamp · following this page`; the device acknowledged the sent frames. Normal composer trials of light and strong S02 showed clearly different occupied areas. Screenshots: ignored `tmp/housemate-v3.11-intensity-light.png` and `tmp/housemate-v3.11-intensity-strong.png`. No live microphone session was repeated.
+
 ## Dissolve directly into the white basic light · 2026-11-20 · v3.10.2
 
 Complete suite: **325 passed, 0 failed**. `git diff --check` passed.

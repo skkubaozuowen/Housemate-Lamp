@@ -67,6 +67,7 @@ export function createPlan(type = 'idle', overrides = {}) {
   // One seed per plan, never per frame. Explicit seeds make workshop runs repeatable.
   const seed = ((Date.now() & 0xffffffff) ^ Math.imul(++sequence, 2654435761)) >>> 0;
   return {version:1,responseType,...parameters,expression:'default',paletteVariant:'balanced',colorCount:['mixed','upcoming'].includes(responseType) ? 4 : 3,
+    intensity:SCENE_RESPONSE_TYPES.includes(responseType) ? .5 : 0,
     feelingPrimary:'joy',feelingSecondary:responseType === 'mixed' ? 'sadness' : 'none',feelingBalance:.7,
     mixedMode:'paired',feelingTertiary:'none',seed,...overrides,composition:normalizeComposition(overrides.composition)};
 }
