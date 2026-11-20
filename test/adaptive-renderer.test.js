@@ -9,10 +9,10 @@ import {renderFrame, renderVoiceFrame} from '../public/lib/renderer.js';
 import {SessionController} from '../public/lib/controller.js';
 
 const fixtures=[
-  ['celebrate','default',null,'4ce832467b6b4b06052b530817bf746e578a0e46175e400339852d52b9d24d74'],
+  ['celebrate','default',null,'3612d3c29e21e614dd16c90a962efc26f450f8e2305a777f96fd2cce985abf89'],
   ['celebrate','quiet',null,'daea7e2bcbf98ad1c9e9dd639ad674b32e8a1c1f1916706b61ffe8fc9e145364'],
   ['setback','default',null,'68c827f160717e111c0aa18277dc995413fe759ba832c1eb2569ceaef4adfc44'],
-  ['setback','renew',null,'16a9b980094c17216ddd29b196fe460570c052de13da7cfe87e0765a40080b67'],
+  ['setback','renew',null,'d9270aca56b7b0b5e8e9d214a2afd1a3dfd91787e1715f3b1265068e37e4d231'],
   ['rest','default',null,'2ae83a0848c35ceeb70545626763bedbefd0a0fe6874348b8a1283d704e15095'],
   ['rest','fulfilled',null,'9ffa9ecd34ec548e27de0fc77ba2c5a83b27fd1106f496ee9f014f6d73e2151d'],
   ['upcoming','default',null,'4a47aa93a918596a479374cd1ac3acc2e2706aafeaa29b868a16d1be7137f2a3'],
@@ -130,7 +130,7 @@ test('composition boundaries remain deterministic, luminous and bounded for all 
     for(const p of [0,.17,.42,.78,1,1.8]) {
       const elapsed=original.durationMs*p,frame=renderFrame(original,elapsed);
       assert.ok(frame instanceof Uint8ClampedArray);assert.equal(frame.length,768);
-      assert.ok(frame.every(value=>value>=8&&value<=255),'bounded geometry retains a neutral floor even during the intentional dark star stage');
+      assert.ok(frame.every(value=>value>=8&&value<=255),'bounded geometry retains a luminous surface');
       assert.deepEqual(frame,renderFrame(original,elapsed),'same saved plan and time give the same matrix');
     }
   }
@@ -186,7 +186,7 @@ test('permitted violet and mint stars cannot mix back into a declined blue when 
   }
   const before=renderFrame(controller.plan,10484,controller.rendering),after=renderFrame(controller.plan,10516,controller.rendering);
   assert.ok(Math.max(...before.map((value,i)=>Math.abs(value-after[i])))<=8,'the white shoulder does not snap into a hard pixel mask');
-  assert.ok(difference(before,after)<4.5,'the intentional dark-surface fade remains gradual over 32ms at the hue crossing');
+  assert.ok(difference(before,after)<.5,'the luminous star surface remains gradual over 32ms at the hue crossing');
 });
 
 test('support fields use a luminous shoulder instead of generating a declined intermediate yellow',()=>{

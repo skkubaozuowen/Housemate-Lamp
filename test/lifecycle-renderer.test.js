@@ -37,17 +37,16 @@ test('native idle is exactly static white, including saved palettes, color exclu
   } finally {browser.restore();}
 });
 
-test('celebration and renewal star endings darken only their neutral surface and keep luminous local points',()=>{
+test('celebration and renewal star endings retain their luminous surface and moving colored points',()=>{
   for(const [type,expression] of [['celebrate','default'],['setback','renew']]) {
     const plan=createScenePlan(type,expression,{seed:4589});
-    const early=renderFrame(plan,plan.durationMs*.7),middle=renderFrame(plan,plan.durationMs*.88),late=renderFrame(plan,plan.durationMs);
-    assert.ok(mean(middle)<mean(early)-25,`${type} neutral surface recedes gradually`);
-    assert.ok(mean(late)<mean(middle)-35,`${type} finishes on a dark star surface`);
-    assert.equal(Math.min(...late),8,'the star backdrop remains a neutral near-black, not a blackout');
+    const late=renderFrame(plan,plan.durationMs);
+    assert.ok(mean(late)>240,`${type} retains its original soft bright background`);
     const pixels=Array.from({length:256},(_,i)=>late.slice(i*3,i*3+3));
-    assert.ok(pixels.filter(rgb=>Math.max(...rgb)<25).length>120,'dark empty space separates the stars');
+    assert.ok(pixels.every(rgb=>Math.max(...rgb)>200),'the star stage contains no dark background pixels');
     assert.ok(pixels.filter(rgb=>Math.max(...rgb)>90&&Math.max(...rgb)-Math.min(...rgb)>35).length>=4,'colored points remain genuinely luminous');
     assert.ok(delta(renderFrame(plan,plan.durationMs*.88),renderFrame(plan,plan.durationMs*.88+1))<=1,'the backdrop never switches abruptly');
+    assert.notDeepEqual(late,renderFrame(plan,plan.durationMs+500),'finishing points continue moving and twinkling');
   }
   const quiet=createScenePlan('celebrate','quiet',{seed:4589});
   assert.ok(mean(renderFrame(quiet,quiet.durationMs))>210,'quiet recognition retains its own warm, white-ground unfolding');
@@ -82,16 +81,16 @@ test('every scenario returns through one continuous dim and white rise, then sto
   } finally {browser.restore();}
 });
 
-test('a dark star ending does not preflash white before the return dip',()=>{
+test('a bright star ending retains the separate return dip without a white preflash',()=>{
   const browser=browserHarness();
   try {
     for(const [type,expression] of [['celebrate','default'],['setback','renew']]) {
       const renderer=new LightRenderer(browser.canvas()),scene=createScenePlan(type,expression,{seed:4589,transitionMs:0});
       renderer.setPlan(scene);browser.tick(0);browser.tick(scene.durationMs);
-      const dark=mean(renderer.frame);renderer.setPlan(createPlan('idle',{transitionMs:2000}));browser.tick(scene.durationMs);
+      const ending=mean(renderer.frame);renderer.setPlan(createPlan('idle',{transitionMs:2000}));browser.tick(scene.durationMs);
       for(const elapsed of [100,300,600,900]) {
         browser.tick(scene.durationMs+elapsed);
-        assert.ok(mean(renderer.frame)<=dark+1,'the outgoing stars dim without a bright backing field appearing');
+        assert.ok(mean(renderer.frame)<=ending+1,'the outgoing stars gently dim only after the scene ends');
       }
       browser.tick(scene.durationMs+2000);assert.ok(white(renderer.frame));renderer.destroy();
     }

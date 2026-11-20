@@ -391,7 +391,7 @@ function responseScene({type,expression,p,clock,phase,amp,energy,speed,loop,acce
         // Gold gently enters the violet tide from the side, opens into warmth,
         // then leaves a quiet constellation. The opening never restarts.
         const warmth=ease((p-c.supportDelay)/.36),starStart=Math.max(.76,c.supportDelay+.36);
-        const stars=ease((p-starStart)/Math.min(.22,1-starStart)),resident=1-stars;
+        const stars=ease((p-starStart)/Math.min(.22,1-starStart)),resident=1-stars*.88;
         const warmGain=c.supportStrength*c.accentWeight;
         const t=clock*amp*.9+phase;
         addVeil(scene,1.12-warmth*.63,.56+Math.sin(t*.43)*amp*.035,(.1+warmth*.55)*c.accentScale,(.13+warmth*.25)*c.accentScale,-.28,2,base*.92*warmth*resident*warmGain);
@@ -563,11 +563,8 @@ export function renderFrame(plan = {}, elapsedMs = 0, {reducedMotion=false,color
     return Array.from({length:31},(_,j)=>(j+1)/32).some(p=>avoidedColors.includes(colorGroup(a.map((channel,c)=>mix(channel,b[c],p)))));
   }) : [];
   const native=primitive===defaults.motionPrimitive;
-  // The star ending belongs to the finite scene, rather than another animation
-  // painted on top of the matrix. Its neutral surface recedes into darkness so
-  // the remaining colored points read as light instead of pigment on white.
-  const stars=native&&((type==='celebrate'&&plan.expression!=='quiet')||(type==='setback'&&plan.expression==='renew'));
-  const background=stars?mix(255,8,ease((p-.76)/.22)):255;
+  // Keep the original luminous surface beneath the colored finishing points.
+  const background=255;
   const composition=normalizeComposition(plan.composition);
   const composed=native ? responseScene({type,expression:plan.expression||'default',p,clock,phase,amp,energy,speed,loop,accentIndices,primaryCount,feelingBalance:number(plan.feelingBalance,.7),mixedMode:plan.mixedMode,composition}) : null;
   if(composed&&['celebrate','setback','rest','upcoming','mixed','everyday'].includes(type))adaptSceneGeometry(composed,composition);
@@ -850,7 +847,7 @@ export class LightRenderer {
       if(transition.returnToIdle) {
         const phase=clamp(transition.elapsed/transition.duration),dip=.12;
         // Keep moving outgoing light, gently lower it, then let ordinary white
-        // light rise. A dark star field keeps darkening first: no white preflash.
+        // light rise. The return remains separate from the scene's bright stars.
         this._frame=phase<.45 ? source.map(value=>value*mix(1,dip,ease(phase/.45)))
           : source.map(value=>mix(value*dip,255,ease((phase-.45)/.55)));
       } else this._frame=target.map((value,index)=>mix(source[index],value,progress));

@@ -1,5 +1,13 @@
 # Prototype validation
 
+## Restore the soft star background · 2026-11-20 · v3.10.1
+
+Complete suite: **325 passed, 0 failed**. `git diff --check` passed.
+
+- At the user's request, S01 celebration and S02 renewal again keep their original white diffusion surface beneath the colored finishing points. S02 also restores its faint warm resident field. Star positions, twinkling, contextual controls and the 10–15-second response intervals are unchanged.
+- The user explicitly chose to retain the separate end-of-response dim-and-rise into white Idle. Voice, USB transport and the physical brightness cap were not changed; the local service did not need restarting.
+- Independent RGB comparisons found all 576 sampled S01/S02 frames identical to the pre-dark-background renderer. Another 2,808 sampled frames for the remaining expressions matched the previously published renderer, as did voice output. Existing lifecycle checks confirm that the bright stars remain animated and the separate return transition still reaches white once.
+
 ## White basic light and finite responses · 2026-11-20 · v3.10.0
 
 Complete suite: **325 passed, 0 failed**. Changed modules and `git diff --check` passed. An independent run also passed all 325 checks.
