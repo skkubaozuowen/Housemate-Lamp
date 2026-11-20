@@ -1,5 +1,13 @@
 # Prototype validation
 
+## Dissolve directly into the white basic light · 2026-11-20 · v3.10.2
+
+Complete suite: **325 passed, 0 failed**. `git diff --check` passed.
+
+- Replaced the end-of-response dim-and-rise with a two-second dissolve into white for all S expressions. The actual visible RGB frame anchors the handoff; a small, decreasing amount of the outgoing motion remains as the color contrast fades. No whole-field dimming multiplier or black stage is used.
+- Existing regressions now check a luminous return, gradual star-to-white blending, continuous first frames, one RAF, pause/hidden time, interruption by new input and reduced motion. Local browser playback confirmed a light background during the S02 return. Screenshot: ignored local `tmp/housemate-v3.10.2-white-dissolve.png`.
+- The original S01/S02 star backgrounds, response durations, basic signals, speech recognition, USB ownership and physical brightness cap remain unchanged. The local service did not need restarting. A separate page retained its existing USB ownership during browser verification; no new physical-light or microphone observation is claimed.
+
 ## Restore the soft star background · 2026-11-20 · v3.10.1
 
 Complete suite: **325 passed, 0 failed**. `git diff --check` passed.

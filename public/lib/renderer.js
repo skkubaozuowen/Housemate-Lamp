@@ -825,7 +825,7 @@ export class LightRenderer {
   _compose() {
     if(!this._plan&&!this._voiceActive&&!this._transition)return;
     // A preference changed during a pause takes effect on the first resumed
-    // paint too; it must not leave an old dim/rise transition running.
+    // paint too; it must not leave an old return transition running.
     if(this._reducedMotion&&this._transition?.returnToIdle)this._transition=null;
     const transition=this._transition;
     const progress=transition ? ease(transition.elapsed/transition.duration) : 1;
@@ -841,16 +841,12 @@ export class LightRenderer {
           : renderFrame(state.plan,state.elapsed+transition.elapsed,{colors:state.colors,accentColors:state.accentColors,avoidedColors:state.avoidedColors});
         // Keep the exact displayed first frame even if a network result arrives
         // during an earlier handoff; then let its outgoing light keep moving.
-        const release=ease(transition.elapsed/180);
+        const release=ease(transition.elapsed/180)*(transition.returnToIdle ? .15*(1-progress) : 1);
         source=live.map((value,index)=>mix(transition.from[index],value,release));
       }
-      if(transition.returnToIdle) {
-        const phase=clamp(transition.elapsed/transition.duration),dip=.12;
-        // Keep moving outgoing light, gently lower it, then let ordinary white
-        // light rise. The return remains separate from the scene's bright stars.
-        this._frame=phase<.45 ? source.map(value=>value*mix(1,dip,ease(phase/.45)))
-          : source.map(value=>mix(value*dip,255,ease((phase-.45)/.55)));
-      } else this._frame=target.map((value,index)=>mix(source[index],value,progress));
+      // Moving color fields dissolve directly into the white basic light.
+      // Only their color contrast recedes; there is no whole-lamp dimming stage.
+      this._frame=target.map((value,index)=>mix(source[index],value,progress));
       if(progress>=1)this._transition=null;
     } else this._frame=target;
     this._voiceDirty=false;

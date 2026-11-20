@@ -52,7 +52,7 @@ test('celebration and renewal star endings retain their luminous surface and mov
   assert.ok(mean(renderFrame(quiet,quiet.durationMs))>210,'quiet recognition retains its own warm, white-ground unfolding');
 });
 
-test('every scenario returns through one continuous dim and white rise, then stops its RAF',()=>{
+test('every scenario dissolves continuously into white without a dark stage, then stops its RAF',()=>{
   const browser=browserHarness();
   try {
     for(const type of SCENE_RESPONSE_TYPES) {
@@ -63,17 +63,16 @@ test('every scenario returns through one continuous dim and white rise, then sto
       renderer.setPlan(createPlan('idle',{transitionMs:2000}));
       assert.deepEqual(renderer.frame,ending,'the first return frame is the actual visible scene');
       assert.equal(browser.queue.size,1);browser.tick(scene.durationMs);
-      let before=renderer.frame.slice(),atDip;
+      let before=renderer.frame.slice();
       for(let step=1;step<120;step++) {
         const elapsed=step*1000/60;
         browser.tick(scene.durationMs+elapsed);
         assert.equal(browser.queue.size,1,'one return transition owns one RAF');
         assert.ok(delta(before,renderer.frame)<=12,`${type} at ${elapsed}: ${delta(before,renderer.frame)} channel step`);
-        assert.ok(Math.min(...renderer.frame)>=1,'the dip does not insert a full-black frame');
-        before=renderer.frame.slice();if(elapsed>=900&&!atDip)atDip=before;
+        assert.ok(mean(renderer.frame)>=mean(ending)-4,`${type} stays luminous throughout the return`);
+        before=renderer.frame.slice();
       }
       browser.tick(scene.durationMs+2001);
-      assert.ok(mean(atDip)<mean(ending)*.2,`${type} visibly dims before white light rises`);
       assert.ok(white(renderer.frame));assert.ok(white(output.at(-1)),'onFrame uses the same final white hardware data');
       assert.equal(browser.queue.size,0,'a static idle lamp has no stale scene loop');
       renderer.destroy();
@@ -81,16 +80,17 @@ test('every scenario returns through one continuous dim and white rise, then sto
   } finally {browser.restore();}
 });
 
-test('a bright star ending retains the separate return dip without a white preflash',()=>{
+test('bright star endings dissolve into white without darkening or an abrupt white flash',()=>{
   const browser=browserHarness();
   try {
     for(const [type,expression] of [['celebrate','default'],['setback','renew']]) {
       const renderer=new LightRenderer(browser.canvas()),scene=createScenePlan(type,expression,{seed:4589,transitionMs:0});
       renderer.setPlan(scene);browser.tick(0);browser.tick(scene.durationMs);
       const ending=mean(renderer.frame);renderer.setPlan(createPlan('idle',{transitionMs:2000}));browser.tick(scene.durationMs);
-      for(const elapsed of [100,300,600,900]) {
+      for(const elapsed of [100,300,600,900,1200,1600]) {
         browser.tick(scene.durationMs+elapsed);
-        assert.ok(mean(renderer.frame)<=ending+1,'the outgoing stars gently dim only after the scene ends');
+        assert.ok(mean(renderer.frame)>=ending-2,'the star background stays luminous during the handoff');
+        assert.ok(!white(renderer.frame),'color dissolves over time rather than flashing straight to white');
       }
       browser.tick(scene.durationMs+2000);assert.ok(white(renderer.frame));renderer.destroy();
     }
@@ -120,7 +120,7 @@ test('return ramps exclude hidden and paused time, and reduced motion bypasses t
     const frozen=renderer.frame.slice();renderer.setPaused(true);browser.tick(50000);assert.deepEqual(renderer.frame,frozen);
     renderer.setPaused(false);browser.tick(50001);assert.deepEqual(renderer.frame,frozen);
     browser.hidden(true);browser.tick(100000);assert.deepEqual(renderer.frame,frozen);browser.hidden(false);browser.tick(100001);assert.deepEqual(renderer.frame,frozen);
-    browser.tick(100101);assert.ok(mean(renderer.frame)<mean(frozen),'only the visible 100ms continues the dim');
+    browser.tick(100101);assert.ok(mean(renderer.frame)>mean(frozen),'only the visible 100ms continues the dissolve into white');
     renderer.setPaused(true);renderer.setReducedMotion(true);assert.equal(browser.queue.size,0);
     renderer.setPaused(false);assert.ok(white(renderer.frame));assert.equal(browser.queue.size,0);renderer.destroy();
   } finally {browser.restore();}
