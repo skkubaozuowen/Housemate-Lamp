@@ -277,14 +277,18 @@ function responseScene({type,expression,p,clock,phase,amp,energy,speed,loop,acce
       return scene;
     }
     case 'acknowledge': {
-      // One listening cloud gives a gentle nod. Its two closely overlapping
-      // color lobes are already the two lights that can separate into thinking.
-      const nod=Math.sin(Math.PI*p)**2,spread=nod*amp*.1;
-      const x=.5,y=.465-Math.sin(Math.PI*p)*amp*.04;
-      addField(scene,x-.025,y,.205+spread,.225+spread,0,base*(.62+nod*.38));
-      addField(scene,x+.035,y+.02,.205+spread,.21+spread,1,base*(.58+nod*.26));
-      addField(scene,x,y+.025,.27+spread,.245+spread,2,base*.23);
-      addRing(scene,x,y,.035+open*(.33+amp*.13),.1,1,base*.42*Math.sin(Math.PI*p));
+      // Grow one ball, then release it into a single expanding ring. Once
+      // released there are no filled fields: the center is the white light
+      // surface, including while this receipt hands off to the next response.
+      const growth=ease(p/.38),release=ease((p-.35)/.18);
+      const travel=clamp((p-.35)/.65),x=.5,y=.475;
+      const radius=.145+growth*(.105+amp*.06);
+      if(release<1) {
+        addField(scene,x-.012,y,radius,radius*1.025,0,base*1.05*(1-release));
+        addField(scene,x+.018,y+.012,radius*.86,radius*.9,1,base*.52*(1-release));
+      }
+      addRing(scene,x,y,.2+travel*(.36+amp*.08),mix(.105,.095,travel),0,
+        base*1.2*release*(1-ease((p-.82)/.18)*.35));
       return scene;
     }
     case 'processing': {

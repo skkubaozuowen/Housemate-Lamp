@@ -45,18 +45,21 @@ test('purpose-specific geometry distinguishes nearby responses with identical co
   }
 });
 
-test('receipt and retry stay soft through their brightness and direction changes',()=>{
+test('receipt releases a moving edge and retry stays soft without a whole-field flash',()=>{
   for(const type of ['acknowledge','error'])for(const amplified of [false,true]) {
     const plan=createPlan(type,{seed:4589,...(amplified?{energy:1,amplitude:1,speed:2}:{})});
     const frames=Math.ceil(plan.durationMs/(1000/60));
     let previous=renderFrame(plan,0);
     for(let i=1;i<=frames;i++) {
       const frame=renderFrame(plan,plan.durationMs*i/frames);
-      // Guard the former abrupt retry dim/reappearance at phase boundaries.
-      // Check the displayed RGB, including controls at their strongest setting.
+      // Receipt now deliberately releases a fast outward ring. Its moving edge
+      // can change local pixels more than a filled cloud, without a field-wide
+      // flash. Retry retains its original, slower per-pixel limits.
       const changes=Array.from(frame,(value,index)=>Math.abs(value-previous[index]));
-      assert.ok(Math.max(...changes)<=12,`${type} must not pop between adjacent 60 Hz frames`);
-      assert.ok(changes.reduce((sum,value)=>sum+value,0)/frame.length<=2,`${type} must not flash across the field`);
+      assert.ok(Math.max(...changes)<=(type==='acknowledge'?20:12),`${type} must not pop between adjacent 60 Hz frames`);
+      assert.ok(changes.reduce((sum,value)=>sum+value,0)/frame.length<=(type==='acknowledge'?4:2),`${type} keeps changes spatially local`);
+      const brightnessChange=Math.abs(frame.reduce((sum,value,index)=>sum+value-previous[index],0)/frame.length);
+      assert.ok(brightnessChange<=2,`${type} must not flash across the field`);
       previous=frame;
     }
   }

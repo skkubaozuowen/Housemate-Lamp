@@ -25,22 +25,32 @@ export function orchestrateIntensity(raw={}) {
   const set=(field,range,residual=.15)=>{
     composition[field]=anchors(intensity,range)+residual*(composition[field]-COMPOSITION_DEFAULTS[field]);
   };
+  // Counts have only a few integer steps. Independent model offsets can flip
+  // their order, making a stronger disclosure look sparser than a milder one.
+  // Derive these steps from degree alone; tempo, spacing and shape stay free.
+  const count=(field,range)=>set(field,range,0);
   if(type==='mixed'&&raw.mixedMode==='layered') {
     // The renderer varies ribbon thickness at a fixed period. Scaling the
     // weaving pattern here would change its structure instead of its presence.
-  } else set('fieldScale',[.75,1,1.25]);
+  } else set('fieldScale',[.75,1,type==='setback'?1.2:1.25]);
   if(type==='celebrate') {
     if(key!=='quiet') {
-      set('rippleCount',[1,3,5]);
+      count('rippleCount',[1,3,5]);
       set('waveWidth',[.7,1,1.35]);
       set('accentScale',[.65,1,1.5]);
       set('accentWeight',[.5,1,1.45]);
     }
   } else if(type==='setback') {
-    set('waveWidth',[.8,1,1.35]);
+    // The existing two-wave, five-glow composition is the midpoint. A third
+    // wave adds presence without stacking four broad alternating red bands.
+    count('waveCount',[1,2,3]);
+    set('waveWidth',[.8,1,1.15]);
     if(key!=='renew') {
-      set('accentScale',[.65,1,1.5]);
-      set('accentWeight',[.5,1,1.45]);
+      count('spotCount',[2,5,7]);
+      set('accentScale',[.65,1,1.35]);
+      // This also weights the red wave. Keep the standard violet/red/blue
+      // balance instead of turning higher degree into a redder emotion.
+      set('accentWeight',[1,1,1]);
     }
   } else if(type==='rest') {
     set('waveWidth',[.85,1,1.4]);
@@ -49,7 +59,7 @@ export function orchestrateIntensity(raw={}) {
     result.speed=clamp(anchors(intensity,[.42,.3,.15])+.2*((Number.isFinite(raw.speed)?raw.speed:.3)-.3),.15,.46);
   } else if(type==='everyday') {
     set('spread',[.9,1,1.15]);
-    set('rippleCount',[1,2,3]);
+    count('rippleCount',[1,3,3]);
   }
   result.composition=normalizeComposition(composition);
   return result;

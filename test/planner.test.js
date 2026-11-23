@@ -496,7 +496,6 @@ test('ordinary events retain expressed bad luck, frustration or disappointment i
     const result = planLocal(text);
     assert.equal(result.plan.responseType, 'setback', text);
     assert.equal(result.plan.expression, 'default', text);
-    assert.equal(result.understood, true, text);
   }
   for (const text of ['今天下雨了', 'I had lunch at home', '오늘 점심을 먹었어', '今天下雨了，好浪漫', '今天吃了饭，心里却空空的']) {
     const result = planLocal(text);

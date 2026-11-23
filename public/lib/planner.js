@@ -206,16 +206,63 @@ function explicitFeelingMix(positiveText, discomfortText, allowCompatible = fals
   };
 }
 
+// Only the person's own, unquoted words can directly operate the lamp. Keep
+// the original disclosure for the AI; this projection is a conservative local
+// hint, not an attempt to understand every reported sentence with regexes.
+export function directInteractionText(input) {
+  const source = typeof input === 'string' ? input.trim().slice(0, 2000) : '';
+  const quotes = /“[^”]*”|「[^」]*」|『[^』]*』|‘[^’]*’|"[^"\n]*"|(?<![\p{L}\p{N}])'[^'\n]+'(?![\p{L}\p{N}])/gu;
+  const unquoted = source.replace(quotes, (quote, offset) => {
+    const label = quote.slice(1, -1).trim();
+    const before = source.slice(Math.max(0, offset - 24), offset);
+    // Quoting a color name in a direct selection still names that color.
+    if (label.length <= 12 && /(?:换成|換成|改成|使用|用|要|给我|給我|\b(?:use|choose|make it|set it to)\s*)\s*$/i.test(before)
+      && Object.values(colorTerms).some(pattern => pattern.test(label))) return label;
+    return ' ';
+  });
+  const separators = /([，,。.!！；;？?\n]+|\b(?:but|however|yet)\b|但是|不过|不過|可是|然而|但|하지만|그런데)/giu;
+  const thirdParty = /^(?:(?:今天|昨天|刚才|剛才|刚刚|剛剛|现在|現在)\s*)?(?:(?:其实|其實)?是\s*)?(?:(?:我(?:的)?|我们(?:的)?|那个|那個|这位|這位)?(?:朋友|同事|同学|同學|室友|家人|妈妈|媽媽|爸爸|老板|老闆|老师|老師)|别人|別人|有人|[他她](?:们|們)?|(?:(?:my|our|the|a)\s+)?(?:friend|colleague|classmate|roommate|mother|father|mom|dad|boss|teacher)\b|he\b|she\b|they\b|someone\b|(?:오늘|어제|아까)?\s*(?:친구|동료|엄마|아빠|그녀|그는|그가|누군가))/i;
+  const reportedBySelf = /^(?:我(?:听|聽|听到|聽到|看到|看见|看見|读到|讀到).{0,12}(?:说|說|写|寫)|我(?:只是|在)?(?:转述|轉述|引用)|i (?:heard|read|was told)\b|(?:친구|동료).{0,12}(?:말했|말하|했대))/i;
+  const projected = unquoted.split(separators).map(part => {
+    const clause = part.trim();
+    if (!thirdParty.test(clause) && !reportedBySelf.test(clause)) return part;
+    // A reported event can be followed by the speaker's own current reaction.
+    const own = /[让讓使]我(?:感到|觉得|覺得|也|很|挺|有点|有點|特别|特別){0,3}(?:难过|難過|开心|開心|伤心|傷心|紧张|緊張|担心|擔心|害怕|安心|满足|滿足|累|疲惫|疲憊)/i.exec(clause);
+    return own ? clause.slice(own.index) : ' ';
+  }).join('').trim();
+  return projected.replace(/^(?:[\s，,。.!！；;？?]+|但是|不过|不過|可是|然而|但|\b(?:but|however|yet)\b|하지만|그런데)+/giu, '').trim();
+}
+
+function currentDisclosure(text) {
+  const past = /以前|曾经|曾經|过去|過去|昨天|昨晚|前天|上周|上週|去年|刚才|剛才|刚刚|剛剛|\b(?:yesterday|last (?:night|week|month|year)|used to|was|were)\b|어제|예전|지난|아까/i;
+  const current = /现在|現在|如今|目前|此刻|今天|\b(?:now|today|currently|at present)\b|지금|오늘/i;
+  const clauses = text.split(/([，,。.!！；;\n]+|\b(?:but|however|yet)\b|但是|不过|不過|可是|然而|但|하지만|그런데|지만)/giu);
+  let previous = '', offset = 0;
+  for (const clause of clauses) {
+    if (current.test(clause) && past.test(previous)) return { text:text.slice(offset).trim(), uncertain:true };
+    previous += clause;
+    offset += clause.length;
+  }
+  return { text, uncertain:false };
+}
+
+export function currentInteractionText(input) {
+  return currentDisclosure(directInteractionText(input)).text;
+}
+
 export function planLocal(input, context = {}) {
-  const text = typeof input === 'string' ? input.trim().slice(0, 2000) : '';
+  const sourceText = typeof input === 'string' ? input.trim().slice(0, 2000) : '';
+  const directText = directInteractionText(sourceText);
+  const projected = currentDisclosure(directText);
+  let text = projected.text;
   const current = context.currentPlan ? normalizePlan(context.currentPlan) : null;
   const prefs = normalizePreferences(context.preferences);
   const previousPreferences = normalizePreferences(prefs);
   const currentFamily = current ? resolvePaletteFamily(current, prefs) : null;
   const currentPalette = current ? { ...(paletteLockAllowed(prefs.lockedPalette, prefs) ? prefs.lockedPalette : current), paletteFamily: currentFamily || current.paletteFamily } : null;
-  const seed = seedFromText(`${text}:${current?.seed || 0}`);
+  const seed = seedFromText(`${sourceText}:${current?.seed || 0}`);
   let priority = false;
-  let understood = true;
+  let understood = directText === sourceText && !projected.uncertain;
   const keep = currentPalette ? {
     paletteFamily: currentPalette.paletteFamily, paletteVariant: currentPalette.paletteVariant, colorCount: currentPalette.colorCount,
     ...(currentPalette.paletteFamily === 'mixed_warm_cool' ? { feelingPrimary: currentPalette.feelingPrimary, feelingSecondary: currentPalette.feelingSecondary, feelingTertiary:currentPalette.feelingTertiary, mixedMode:currentPalette.mixedMode, feelingBalance: currentPalette.feelingBalance } : {})
@@ -226,7 +273,8 @@ export function planLocal(input, context = {}) {
       : createPlan(type, { seed, ...overrides });
     return { plan: applyPreferences(plan, prefs, current), preferences: normalizePreferences(prefs), priority, understood };
   };
-  if (!text) { understood = false; return make('clarify'); }
+  if (!sourceText) { understood = false; return make('clarify'); }
+  if (!text) { understood = false; return make('everyday'); }
 
   // Explicit boundaries precede emotional words, invitations, and all remote interpretation.
   const doNotLeave = /\b(?:don['’]t|do not|never) leave me alone\b|\bi (?:don['’]t|do not) want to be alone\b|别让我.{0,5}一个人|不要让我.{0,5}一个人|혼자.{0,4}두지\s*마/gi;
@@ -324,19 +372,30 @@ export function planLocal(input, context = {}) {
   }
   if (isQuestion(text) && /控制.{0,6}(实体|实际|家里|房间|硬件|灯)|连接.{0,5}(蓝牙|串口|硬件)|\b(control|connect).{0,25}(physical|real |bluetooth|arduino|hardware|room light)|실제.{0,6}(조명|램프)|블루투스|아두이노/i.test(text)) { priority = true; return make('decline', keep); }
   if (isQuestion(text) && /能.{0,6}(陪我|变换颜色|回应)|\bcan you.{0,15}(?:keep me company|change colou?rs|respond with light)|빛으로.{0,5}(답|반응)/i.test(text)) { priority = true; return make('affirm', keep); }
+  const complexityText = text.replace(/(?:不是|并非|並非|没有|沒有|并没有|並沒有|不算)(?:什么|什麼)?(?:(?:心情|情绪|情緒|感受|心里|心裡)(?:很|特别|特別)?复杂|五味杂陈|五味雜陳|百感交集)|\b(?:(?:don['’]t|do not) have|not|no)\s+(?:any\s+)?(?:mixed feelings|mixed emotions|bittersweet feelings)\b|(?:마음|감정|기분)(?:이|은|가)?\s*복잡하지\s*않[가-힣]*/gi, '');
+  if (complexityText !== text) { understood = false; text = complexityText; }
   const openComplexity = /五味杂陈|五味雜陳|百感交集|(?:心情|情绪|情緒|感受|心里|心裡)(?:真的|很|特别|特別|有点|有點|十分|非常)?复杂|(?:心情|心里|心裡)(?:很|有点|有點)?乱|\b(?:mixed feelings|mixed emotions|bittersweet)\b|(?:마음|감정|기분)(?:이|은|가)?\s*(?:너무|정말|좀|아주)?\s*복잡|만감이?\s*교차/i.test(text);
   const uncertainFeelings = /(?:说不清|說不清|分不清|不知道|不知)(?:楚)?(?:自己|现在|現在|到底|是|我|心里|心裡|心情|什么|什麼|的|一种|一種|感觉|感覺|\s){0,12}(?:开心|開心|难过|難過|感受|感觉|感覺|情绪|情緒)|\b(?:can(?:not|['’]t)|could(?: not|n['’]t)) (?:quite )?(?:tell|say|explain|sort out).{0,45}(?:feel|happy|sad|emotion)|(?:무슨|어떤)\s*(?:감정|기분)인지\s*(?:잘\s*)?모르|(?:기쁜지|좋은지).{0,15}슬픈지.{0,8}모르/i.test(text);
-  if (!openComplexity && !uncertainFeelings && /(?:是什么|是什麼|为什么|為什麼|怎么定义|如何定义|多少|多大|谁是|誰是)|\b(?:what (?:is|are|was)|why (?:is|are|does|do)|how (?:does|do|many|much)|who (?:is|was))\b|무엇|뭐예요|뭔가요|왜.{0,12}(인가|해|하|지)|얼마/i.test(text)) { understood = false; return make('clarify', keep); }
+  const emotionalReflection = /为什么|為什麼|\bwhy\b|왜/i.test(text)
+    && /我|\bi\b|\bmy\b|나는|저는|내가|제가/i.test(text)
+    && /难过|難過|难受|傷心|伤心|不开心|开心|開心|高兴|高興|满足|滿足|释然|釋然|累|疲惫|疲憊|紧张|緊張|焦虑|焦慮|担心|擔心|\b(?:sad|upset|unhappy|happy|joyful|satisfied|content|relieved|tired|exhausted|nervous|anxious|worried)\b|슬프|속상|행복|기뻐|만족|후련|피곤|지쳤|불안|긴장|걱정/i.test(text);
+  if (emotionalReflection) understood = false;
+  if (!openComplexity && !uncertainFeelings && /(?:是什么|是什麼|为什么|為什麼|怎么定义|如何定义|多少|多大|谁是|誰是)|\b(?:what (?:is|are|was)|why (?:is|are|does|do)|how (?:does|do|many|much)|who (?:is|was))\b|무엇|뭐예요|뭔가요|왜.{0,12}(인가|해|하|지)|얼마/i.test(text)) {
+    understood = false;
+    if (!emotionalReflection) return make('clarify', keep);
+  }
 
   // The same situation can hold different orientations. Classify the whole
   // disclosure before choosing a palette; the final clause does not erase it.
   const joyText = text.replace(/(?:不|没|沒有|没有)(?:再|那么|很|太|一点也|一點也|怎么|怎麼)?(?:开心|高兴|幸福|快乐|兴奋|喜悦|滿足|满足)|\bnot\s+(?:(?:at all|very|really)\s+)?(?:happy|joyful|proud|excited|satisfied)\b|(?:행복|기쁘|즐겁).{0,3}않/gi, '');
-  const discomfortText = text.replace(/(?:不|没(?:有)?|沒有)(?:再|太|那么|很|一点也|一點也)?(?:难过|伤心|孤独|孤单|寂寞|紧张|焦虑|害怕|担心)|(?:一点也|一點也)不(?:难过|伤心|孤独|孤单|寂寞)|\b(?:not|no longer)\s+(?:(?:at all|very|really)\s+)?(?:sad|upset|lonely|anxious|nervous|afraid|worried)\b|(?:슬프|외롭|불안하|긴장하|긴장되)지\s*않/gi, '')
+  const discomfortText = text.replace(/(?:不|没(?:有)?|沒有)(?:是|再|太|那么|很|一点也|一點也|觉得|覺得|感到)?(?:难过|難過|难受|難受|伤心|傷心|孤独|孤獨|孤单|孤單|寂寞|紧张|緊張|焦虑|焦慮|害怕|担心|擔心|失败|失敗|受挫|挫败|挫敗|沮丧|沮喪|失落|郁闷|鬱悶)|(?:一点也|一點也)不(?:难过|难受|伤心|孤独|孤单|寂寞)|\b(?:not|no longer|never|wasn['’]t|isn['’]t|didn['’]t)\s+(?:(?:at all|very|really)\s+)?(?:sad|upset|lonely|anxious|nervous|afraid|worried|fail(?:ed)?)\b|(?:슬프|외롭|불안하|긴장하|긴장되|실패하)지\s*않[가-힣]*/gi, '')
     .replace(/(?:不(?:觉得|覺得|算|是)?|没(?:有)?|沒有)(?:再|太|那么|那麼|很)?(?:倒霉|倒楣|不顺|不走运|生气|愤怒|烦躁|讨厌|压力)|\b(?:not|no longer)\s+(?:(?:at all|very|really)\s+)?(?:unlucky|annoyed|angry|frustrated|stressed)\b|안\s*(?:긴장|불안|걱정)|(?:짜증나|걱정되|걱정하|긴장되|긴장하|불안하)지\s*않/gi, '');
   const joyful = /开心|幸福|高兴|快乐|兴奋|喜悦|\b(happy|joyful|proud|delighted|excited|thrilled|joy)\b|행복|기뻐|기쁘|즐거|신나/i.test(joyText);
   const quietAchievement = /满足|滿足|踏实|释然|鬆了一口氣|松了一口气|成就感|\b(satisfied|satisfaction|fulfilled|fulfilment|fulfillment|content|relieved)\b|뿌듯|보람|만족/i.test(joyText);
   const difficult = /没用|没价值|一无是处|不值得|难过|难受|糟透|糟糕|伤心|哭|孤独|孤单|寂寞|沮丧|不开心|不高兴|失落|失败|没做好|做得不好|生气|愤怒|倒霉|倒楣|不顺|不走运|受挫|挫败|委屈|郁闷|烦躁|好烦|真烦|很烦|太烦|烦死|讨厌|泡汤|\b(useless|worthless|a failure|hate myself|sad|crying|cried|awful|rough|terrible|lonely|upset|unhappy|not happy|failed|went wrong|angry|disappointed|unlucky|annoyed|annoying|frustrated|frustrating|miserable|ruined)\b|\b(?:bad luck|(?:nothing|everything) (?:is )?(?:going wrong|goes wrong)|(?:hard|bad|difficult|tough) (?:day|time|moment))\b|\btoday was (?:hard|bad|difficult|tough)\b|쓸모없|가치.{0,3}없|내가.{0,3}싫|슬프|슬퍼|우울|외롭|외로|속상|최악|실패|망쳤|화가|힘들|짜증|재수\s*없|운이?\s*없|뜻대로\s*안|행복하지\s*않|기쁘지\s*않/i.test(discomfortText);
-  const tired = /累|疲惫|疲倦|疲乏|筋疲力尽|不想动|\b(tired|exhausted|worn out|drained|long day|spent|weary)\b|피곤|지쳤|지쳐|지친|힘든\s*하루|녹초/i.test(text);
+  const tiredText = text.replace(/(?:不|没(?:有)?|沒有)(?:再|太|很|那么|那麼|怎么|怎麼|觉得|覺得|感到)?(?:筋疲力尽|筋疲力盡|疲惫|疲憊|疲倦|疲乏|累)|\b(?:not|never|no longer|wasn['’]t|isn['’]t|aren['’]t)\s+(?:(?:at all|very|really|that|so)\s+)?(?:tired|exhausted|worn out|drained|weary)\b|(?:피곤하|지치|힘들)지\s*않[가-힣]*|안\s*(?:피곤|지쳐|지친|힘들)[가-힣]*/gi, '');
+  const tired = /累|疲惫|疲倦|疲乏|筋疲力尽|不想动|\b(tired|exhausted|worn out|drained|long day|spent|weary)\b|피곤|지쳤|지쳐|지친|힘든\s*하루|녹초/i.test(tiredText);
+  if (discomfortText !== text || tiredText !== text) understood = false;
   const tense = /紧张|焦虑|害怕|好怕|慌|压力|担心|\b(nervous|anxious|afraid|scared|tense|stressed|stressful|overwhelmed|panic|worried)\b|긴장|불안|무서|초조|스트레스|걱정/i.test(discomfortText);
   const anticipationText = joyText.replace(/(?:不|没(?:有)?|沒有)(?:再|太|很|那么|那麼|怎么|怎麼)?(?:期待|盼望|等不及)|\b(?:not|don['’]t|do not)\s+(?:really\s+)?(?:look(?:ing)? forward|eager|excited)\b|(?:기대|설레)(?:하지|되지)?\s*않|안\s*(?:기대|설레)/gi, '');
   const positiveAnticipation = /期待|盼望|(?:终于可以|终於可以).{0,10}(?:见面|見面|团聚|團聚|休息|放假|回家)|等不及|\b(look(?:ing)? forward|can['’]?t wait|excited|eager)\b|기대|설레|드디어.{0,8}(만나|볼)/i.test(anticipationText);
@@ -347,6 +406,9 @@ export function planLocal(input, context = {}) {
   const solitudeContext = /没有人.{0,5}(一起|陪|庆祝)|没人.{0,5}(一起|陪|庆祝)|一个人|\b(?:alone|no one|nobody|by myself)\b|혼자|아무도/i.test(text);
   const achievement = /终于.{0,15}(完成|录用|录取|成功|通过|结束|做完)|论文.{0,8}(录用|录取)|\b(?:(?:finally|just).{0,25}(?:finished|accepted|done|passed|won)|(?:paper|thesis).{0,12}accepted|i did it|i got (?:the job|accepted))\b|드디어.{0,12}(끝|완성|해냈|통과|합격)|논문.{0,8}(게재|승인)/i.test(text);
   const positiveMilestone = /领(?:到|取)?毕业证|拿(?:到)?毕业证|毕业典礼|(?:我|就要|终于|明天|下周).{0,6}毕业(?!考试|考)|与家人团聚|和家人团聚|跟家人团聚|领(?:奖|结婚证)|\b(?:graduat(?:e|ed|ing|ion)|collect(?:ing)? (?:my |a )?(?:degree|diploma)|reunit(?:e|ed|ing) with (?:my |the )?family|got (?:the|a new) job|won (?:a|the) award)\b|졸업(?:해|하|식|이야|이에|을)|가족.{0,8}(?:다시\s*만나|재회)|취업(?:했|에\s*성공)/i.test(text);
+  const eventContrast = /但|却|卻|可是|然而|不过|不過|可惜|只是|\b(?:but|however|although|though|yet)\b|하지만|그런데|아쉽/i.test(text);
+  if ((birthday || achievement || positiveMilestone) && eventContrast && !joyful) understood = false;
+  if (difficult && tense) understood = false;
   const feelingMix = explicitFeelingMix(joyText, discomfortText, openComplexity);
   if (uncertainFeelings || openComplexity && !feelingMix) return make('mixed', { expression:'bittersweet', mixedMode:'open', feelingBalance:.5 });
   if (openComplexity && feelingMix) return make('mixed', { expression:'bittersweet', ...feelingMix });
@@ -370,6 +432,7 @@ export function planLocal(input, context = {}) {
     return make('celebrate', { expression: quietAchievement && !/太开心|好开心|太幸福|太高兴|thrilled|so happy|신나|너무\s*행복/i.test(text) ? 'quiet' : 'default' });
   }
   if (difficult && (retry || encouragement || /安慰我|给我.{0,5}(?:支持|力量)|\b(?:comfort me|give me (?:some )?(?:support|strength))\b|위로해|힘이\s*필요/i.test(text))) return make('setback', { expression:'renew' });
+  if (difficult && tense) return make('setback');
   // S04 answers expressed nervousness or a request for courage. A date or
   // event name alone does not establish that the person needs encouragement.
   if (tense || encouragement) return make('upcoming');
@@ -377,7 +440,7 @@ export function planLocal(input, context = {}) {
   if (difficult || retry) return make('setback', { expression: retry ? 'renew' : 'default' });
   const plainSchedule = /^(?:我)?(?:明天|下周|后天)(?:我)?(?:有|要|要去|有个|要做)?(?:发表|演讲|面试|考试)(?:了)?[。.!！\s]*$|^(?:(?:i have|i['’]m giving|i am giving|i will give) (?:a |an )?)?(?:a |an |my )?(?:presentation|interview|exam) (?:is )?(?:tomorrow|next week)[.!\s]*$|^(?:내일|다음\s*주)\s*(?:(?:제가|나는|저는)\s*)?(?:발표|면접|시험)(?:가|이|야|이야|이에요|예요|해|해요|를\s*해|를\s*해요|이\s*있어|가\s*있어|이\s*있어요|가\s*있어요)?[.!\s]*$/i.test(text);
   if (plainSchedule) return make('everyday');
-  if (!isQuestion(text) && /我|今天|明天|下周|刚刚|刚才|吃了|回家|天气|下雨|\b(?:i |i['’]m|my |today|tomorrow|next week|this morning|had lunch|had dinner|weather|went |came |a day)\b|오늘|내일|다음\s*주|나는|저는|밥|날씨|집에/i.test(text)) {
+  if (!isQuestion(text) && /我|今天|现在|現在|明天|下周|刚刚|刚才|吃了|回家|天气|下雨|\b(?:i |i['’]m|my |today|tomorrow|next week|this morning|had lunch|had dinner|weather|went |came |a day)\b|오늘|지금|내일|다음\s*주|나는|저는|밥|날씨|집에/i.test(text)) {
     // An unfamiliar story is a gentle local fallback, but still reaches the
     // language model for interpretation instead of being locked as ordinary.
     // A meal or weather keyword is not evidence of neutral affect. Keep the

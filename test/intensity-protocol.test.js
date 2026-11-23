@@ -30,10 +30,10 @@ const modelPlan = ([, type, expression, feelings = {}], intensity = .5) => creat
   ...feelings
 });
 const completed = plan => ({ status:'completed', output:[{ content:[{ type:'output_text', text:JSON.stringify(plan) }] }] });
-async function remote(suggested, preferences = {}, localPlan = suggested) {
+async function remote(suggested, preferences = {}, localPlan = suggested, text = '这是一轮研究中的表达') {
   let request;
   const result = await requestPlan({
-    key:'test-key', model:'test-model', text:'这是一轮研究中的表达', history:[], context:{ preferences },
+    key:'test-key', model:'test-model', text, history:[], context:{ preferences },
     local:{ plan:localPlan, preferences:normalizePreferences(preferences), understood:true, priority:false },
     fetchImpl:async (_url, options) => {
       request = JSON.parse(options.body);
@@ -77,7 +77,10 @@ test('degree mapping preserves semantic branches and leaves independent model ch
     const mapped = orchestrateIntensity(raw);
     assert.deepEqual(raw, before, 'mapping never mutates the model or a saved plan');
     assert.deepEqual(semantic(mapped), semantic(raw), `${fixture[0]}: intensity cannot invent a different meaning`);
-    for (const key of ['waveCount', 'spotCount', 'stagger', 'supportDelay', 'supportStrength', 'elongation']) {
+    const independent = ['stagger', 'supportDelay', 'supportStrength', 'elongation',
+      ...(fixture[1] === 'setback' ? [] : ['waveCount']),
+      ...(fixture[1] === 'setback' && fixture[2] !== 'renew' ? [] : ['spotCount'])];
+    for (const key of independent) {
       assert.equal(mapped.composition[key], raw.composition[key], `${fixture[0]} retains independent ${key}`);
     }
     assert.equal(mapped.amplitude, raw.amplitude, 'degree does not override a separate motion preference');
@@ -89,6 +92,135 @@ test('degree mapping preserves semantic branches and leaves independent model ch
   assert.notDeepEqual(orchestrateIntensity(raw).composition, orchestrateIntensity(alternate).composition, 'equal degree still permits different same-family compositions');
   const resting = degrees.map(intensity => orchestrateIntensity(modelPlan(expressions[4], intensity)));
   assert.ok(resting[0].speed > resting[1].speed && resting[1].speed > resting[2].speed, 'stronger fatigue receives a slower resting gesture');
+});
+
+test('the existing default composition and RGB remain the midpoint reference for all eleven expressions', () => {
+  for (const [label, type, expression, feelings = {}] of expressions) {
+    const standard = createScenePlan(type, expression, { seed:4589, intensity:.5, ...feelings });
+    const mapped = orchestrateIntensity(standard);
+    assert.deepEqual(standard.composition, COMPOSITION_DEFAULTS);
+    assert.deepEqual(mapped.composition, COMPOSITION_DEFAULTS, `${label}: midpoint degree cannot silently weaken or densify the current standard`);
+    assert.deepEqual(semantic(mapped), semantic(standard));
+    for (const elapsed of [1500, 6000, 11000]) assert.deepEqual(renderFrame(mapped, elapsed), renderFrame(standard, elapsed), `${label}: existing standard RGB is preserved at ${elapsed}ms`);
+  }
+  const low = orchestrateIntensity(createScenePlan('setback', 'default', { intensity:.2 }));
+  const standard = orchestrateIntensity(createScenePlan('setback', 'default', { intensity:.5 }));
+  const strong = orchestrateIntensity(createScenePlan('setback', 'default', { intensity:.9 }));
+  assert.ok(low.composition.spotCount < standard.composition.spotCount && standard.composition.spotCount < strong.composition.spotCount);
+  const sharing = degrees.map(intensity => orchestrateIntensity(createScenePlan('everyday', 'default', { intensity })));
+  assert.equal(sharing[1].composition.rippleCount, COMPOSITION_DEFAULTS.rippleCount);
+  assert.equal(sharing[2].composition.rippleCount, COMPOSITION_DEFAULTS.rippleCount, 'strong ordinary sharing does not invent extra echoes above the three-echo standard');
+  assert.ok(sharing[2].composition.fieldScale > sharing[1].composition.fieldScale, 'the stronger presence still has spatial room above the standard');
+});
+
+test('S02 receiving density rises with degree despite opposing raw model count suggestions', async () => {
+  const suggested = [
+    { intensity:.2, waveCount:4, spotCount:7 },
+    { intensity:.55, waveCount:2, spotCount:4 },
+    { intensity:.9, waveCount:1, spotCount:2 }
+  ].map(({ intensity, waveCount, spotCount }) => createScenePlan('setback', 'default', {
+    seed:4589, intensity, speed:.23, amplitude:.71,
+    composition:{ ...COMPOSITION_DEFAULTS, waveCount, spotCount, stagger:1.3 }
+  }));
+  const plans = await Promise.all(suggested.map(async raw => (await remote(raw)).plan));
+  for (const key of ['waveCount', 'spotCount']) {
+    assert.ok(plans[0].composition[key] < plans[1].composition[key], `low to middle ${key} cannot be reversed by a dense low-degree suggestion`);
+    assert.ok(plans[1].composition[key] < plans[2].composition[key], `middle to strong ${key} cannot be reversed by a sparse high-degree suggestion`);
+  }
+  assert.equal(plans[2].composition.waveCount, 3, 'strong receiving uses three waves to leave the standard color composition legible');
+  for (let i = 0; i < plans.length; i++) {
+    const plan = plans[i];
+    assert.ok(validatePlan(plan));
+    assert.deepEqual(semantic(plan), semantic(suggested[i]));
+    assert.equal(plan.speed, suggested[i].speed, 'density does not erase the model\'s slow movement');
+    assert.equal(plan.amplitude, suggested[i].amplitude);
+    assert.equal(plan.composition.stagger, suggested[i].composition.stagger, 'appearance intervals retain independent freedom');
+  }
+  for (const [waveCount, spotCount] of [[1, 2], [4, 7]]) {
+    let previous = { waveCount:0, spotCount:0 };
+    for (let step = 0; step <= 100; step++) {
+      const mapped = orchestrateIntensity(createScenePlan('setback', 'default', {
+        intensity:step / 100, composition:{ waveCount, spotCount }
+      }));
+      assert.ok(validatePlan(mapped));
+      for (const key of ['waveCount', 'spotCount']) {
+        assert.ok(Number.isInteger(mapped.composition[key]));
+        assert.ok(mapped.composition[key] >= previous[key], `${key} never falls as continuous degree rises`);
+      }
+      previous = mapped.composition;
+    }
+  }
+});
+
+test('strong listen-only sadness is no sparser than lower-degree frustration while speed and support remain separate', async () => {
+  const sadness = createScenePlan('setback', 'renew', {
+    seed:4589, intensity:.92, speed:.22, amplitude:.72,
+    composition:{ ...COMPOSITION_DEFAULTS, waveCount:2, spotCount:3, stagger:1.3 }
+  });
+  const frustration = createScenePlan('setback', 'default', {
+    seed:4589, intensity:.8, speed:.3, amplitude:.84,
+    composition:{ ...COMPOSITION_DEFAULTS, waveCount:3, spotCount:5, stagger:.85 }
+  });
+  const sad = (await remote(sadness, {}, createScenePlan('setback', 'default'), '我非常非常不开心，心里特别难受，只想你听我说说')).plan;
+  const frustrated = (await remote(frustration, {}, frustration, '倒霉死了')).plan;
+  assert.equal(sad.intensity, .92, 'asking to be heard does not erase a strong disclosed degree');
+  assert.equal(sad.expression, 'default', 'a rejected supportive proposal remains receiving');
+  assert.equal(sad.paletteFamily, 'dusk_indigo');
+  for (const key of ['waveCount', 'spotCount']) assert.ok(sad.composition[key] >= frustrated.composition[key], `strong sadness cannot have lower ${key} solely because the raw model chose sparse sadness`);
+  assert.ok(sad.composition.waveCount > sadness.composition.waveCount && sad.composition.spotCount > sadness.composition.spotCount, 'the problematic sparse strong suggestion is corrected');
+  assert.equal(sad.speed, .22);
+  assert.equal(frustrated.speed, .3);
+  assert.equal(sad.amplitude, .72);
+  assert.equal(frustrated.amplitude, .84);
+  assert.equal(sad.composition.stagger, 1.3);
+  assert.equal(frustrated.composition.stagger, .85);
+  assert.equal(sad.nextState, 'idle');
+  assert.ok(sad.durationMs >= 10000 && sad.durationMs <= 15000);
+});
+
+test('S02 renewal shares the wave-degree anchor and ignores unused spot count changes', async () => {
+  for (const intensity of degrees) {
+    for (const [waveCount, spotCount] of [[1, 2], [4, 7]]) {
+      const raw = createScenePlan('setback', 'renew', {
+        intensity, seed:4589, speed:.24, amplitude:.63,
+        composition:{ ...COMPOSITION_DEFAULTS, waveCount, spotCount }
+      });
+      const { plan } = await remote(raw);
+      assert.equal(plan.expression, 'renew');
+      const receiving = orchestrateIntensity({ ...raw, expression:'default' });
+      assert.equal(plan.composition.waveCount, receiving.composition.waveCount, 'renewal\'s leading waves share the same degree envelope');
+      assert.equal(plan.composition.spotCount, spotCount, 'unused spot counts need no extra remapping');
+      assert.equal(plan.speed, raw.speed);
+      assert.equal(plan.amplitude, raw.amplitude);
+      const changedUnused = { ...plan, composition:{ ...plan.composition, spotCount:spotCount === 2 ? 7 : 2 } };
+      for (const elapsed of [1000, 6000, 12000]) assert.deepEqual(renderFrame(plan, elapsed), renderFrame(changedUnused, elapsed), 'renewal does not accidentally display red-blue receiving spots');
+    }
+  }
+});
+
+test('active integer count anchors cannot be reversed by extreme model suggestions at rounding boundaries', () => {
+  for (const [type, expression, field, extremes] of [
+    ['setback', 'default', 'waveCount', [1, 4]],
+    ['setback', 'renew', 'waveCount', [1, 4]],
+    ['setback', 'default', 'spotCount', [2, 7]],
+    ['celebrate', 'default', 'rippleCount', [1, 5]],
+    ['everyday', 'default', 'rippleCount', [1, 5]]
+  ]) {
+    let previous = 0;
+    for (let step = 0; step <= 100; step++) {
+      const values = extremes.map(value => orchestrateIntensity(createScenePlan(type, expression, {
+        intensity:step / 100, composition:{ [field]:value }
+      })).composition[field]);
+      assert.equal(values[0], values[1], `${type}/${expression} ${field}: degree, rather than raw integer residual, determines a rounding step`);
+      assert.ok(values[0] >= previous, `${type}/${expression} ${field}: continuous degree cannot reverse density`);
+      if (step) assert.ok(values[0] - previous <= 1, 'a small degree change cannot skip multiple integer counts');
+      previous = values[0];
+    }
+  }
+  for (const intensity of degrees) for (const rippleCount of [1, 5]) {
+    const quiet = createScenePlan('celebrate', 'quiet', { intensity, composition:{ rippleCount } });
+    assert.equal(orchestrateIntensity(quiet).composition.rippleCount, rippleCount, 'quiet satisfaction has no celebration-ripple count anchor');
+  }
 });
 
 test('mocked AI low, middle and strong outputs reach all eleven expressions without semantic or lifecycle drift', async () => {
@@ -128,16 +260,16 @@ test('session speed, amplitude, locked palette and hue bans remain authoritative
   }
 });
 
-test('mixed geometry follows the final supported mode when model and local evidence disagree', async () => {
+test('explicit unnamed complexity stays open while the model can reconsider local strand-count hints', async () => {
   const open = modelPlan(expressions[7], .9), layered = modelPlan(expressions[9], .9);
   const { plan:keptOpen } = await remote(layered, {}, open);
   assert.equal(keptOpen.mixedMode, 'open');
   assert.equal(keptOpen.feelingTertiary, 'none');
   assert.deepEqual(keptOpen.composition, orchestrateIntensity({ ...layered, mixedMode:'open' }).composition, 'a mistaken three-strand proposal must not disable the final open field-size anchor');
-  const { plan:keptLayered } = await remote(open, {}, layered);
-  assert.equal(keptLayered.mixedMode, 'layered');
-  assert.equal(keptLayered.feelingTertiary, layered.feelingTertiary);
-  assert.deepEqual(keptLayered.composition, layered.composition, 'three genuinely supported strands keep the original fixed weaving period');
+  const { plan:reconsidered } = await remote(open, {}, layered);
+  assert.equal(reconsidered.mixedMode, 'open');
+  assert.equal(reconsidered.feelingTertiary, 'none');
+  assert.deepEqual(reconsidered.composition, orchestrateIntensity(open).composition, 'a local keyword count cannot suppress the interpreted open composition or its degree mapping');
 });
 
 test('basic exchanges and manual states have degree zero and keep their engineered geometry', async () => {

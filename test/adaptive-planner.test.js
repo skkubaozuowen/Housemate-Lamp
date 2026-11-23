@@ -54,8 +54,9 @@ test('real model orchestration survives profile construction without replacing t
   const {plan,request}=await remote('我很难过，事情没有成功',proposed);
   for(const key of ['intensity','speed','amplitude','durationMs','transitionMs','seed']) assert.equal(plan[key],proposed[key],key);
   assert.ok(plan.energy>=.6&&plan.energy<=.68,'a strong receiving response keeps a visible but bounded color presence');
-  for(const key of ['fieldScale','waveWidth','accentScale'])assert.ok(plan.composition[key]>proposed.composition[key],`${key} expresses the strong visual degree`);
-  for(const key of ['spread','waveCount','rippleCount','spotCount','stagger','supportDelay','supportStrength','elongation'])assert.equal(plan.composition[key],proposed.composition[key],`${key} retains the model's contextual orchestration`);
+  for(const key of ['fieldScale','waveWidth','accentScale'])assert.ok(plan.composition[key]>COMPOSITION_DEFAULTS[key],`${key} expresses a stronger presence than the standard rather than copying an extreme raw suggestion`);
+  assert.deepEqual([plan.composition.waveCount,plan.composition.spotCount],[3,6],'receiving density follows the selected .8 degree rather than independent raw count proposals');
+  for(const key of ['spread','rippleCount','stagger','supportDelay','supportStrength','elongation'])assert.equal(plan.composition[key],proposed.composition[key],`${key} retains the model's contextual orchestration`);
   assert.equal(plan.paletteFamily,'dusk_indigo');
   assert.equal(plan.motionPrimitive,CATALOG.setback.motionPrimitive);
   assert.equal(plan.loop,false);
@@ -107,11 +108,12 @@ test('local explicit commands and boundaries take priority without model calls o
   }
 });
 
-test('recognized family boundaries and mixed feeling evidence survive a different model family', async () => {
-  const nervous=await remote('明天发表，好紧张',createScenePlan('celebrate','default',{speed:1.9,energy:1,durationMs:400}));
-  assert.equal(nervous.plan.responseType,'upcoming');
-  assert.equal(nervous.plan.speed,CATALOG.upcoming.speed,'a conflicting party proposal cannot transfer its kinematics');
-  const fulfilled=await remote('很累但很有成就感',createScenePlan('celebrate'));
+test('AI can revise a familiar scene suggestion while explicit unnamed complexity stays open', async () => {
+  const contextual=await remote('今天我生日，但是我很孤独',createScenePlan('mixed','bittersweet',{mixedMode:'open',speed:.31,energy:.58,durationMs:14000}));
+  assert.equal(contextual.plan.responseType,'mixed');
+  assert.equal(contextual.plan.mixedMode,'open');
+  assert.equal(contextual.plan.speed,.31,'the selected semantic family keeps its own bounded orchestration');
+  const fulfilled=await remote('很累但很有成就感',createScenePlan('rest','fulfilled'));
   assert.equal(fulfilled.plan.responseType,'rest');
   assert.equal(fulfilled.plan.expression,'fulfilled');
   const open=await remote('心情复杂，说不清是开心还是难过',createScenePlan('mixed','bittersweet',{mixedMode:'paired',feelingPrimary:'joy',feelingSecondary:'anger'}));
@@ -171,19 +173,17 @@ test('same-family curated palette variation survives while family, color budget 
 });
 
 
-test('S02 prompt offers optional density references without flattening disclosure or treating intensity as speed', () => {
+test('S02 prompt separates degree-controlled density from feeling character and listen-only support needs', () => {
   const start=PLAN_INSTRUCTIONS.indexOf('setback / S02:');
   const end=PLAN_INSTRUCTIONS.indexOf('rest / S03:');
   const guidance=PLAN_INSTRUCTIONS.slice(start,end);
-  for(const intent of [
-    'not keyword mappings or fixed intensity thresholds',
-    '1–2 broad waves and 2–3 sparse red-blue spots',
-    '3–4 staggered waves and 4–7 red-blue spots',
-    'it may still move slowly',
-    'must not maximize every parameter',
-    'does not automatically erase the expressed intensity',
-    'Strong sadness need not copy the denser waves of anger'
-  ]) assert.ok(guidance.includes(intent),intent);
+  assert.match(guidance,/intensity determines .*wave quantity, red-blue glow quantity, size and presence/);
+  assert.match(guidance,/sadness is not assigned fewer glows by default/);
+  assert.match(guidance,/anger is not assigned more merely because it is anger/);
+  assert.match(guidance,/listen-only intent declines forced encouragement, not the degree/);
+  assert.match(guidance,/must not lower intensity or force a sparse, faint composition/);
+  assert.match(guidance,/strong response can still move slowly/);
+  assert.match(guidance,/not an emotional scoring system/);
 });
 
 

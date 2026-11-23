@@ -10,6 +10,14 @@ const input = $('question');
 const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
 let hardware = null;
 let lightDark = false;
+let coverIdle = true, coverVoice = false;
+function updateCover(frame) {
+  // The original pastel cover is page decoration. The matrix and USB still
+  // receive the exact white idle frame, including the complete return fade.
+  const visible = coverIdle && !coverVoice && $('view').value !== 'grid'
+    && frame?.length > 0 && frame.every(channel => channel === 255);
+  document.body.classList.toggle('cover-idle', Boolean(visible));
+}
 function updateLightContrast(frame) {
   if (!frame?.length || frame.length % 3) return;
   let brightness = 0;
@@ -24,6 +32,7 @@ function updateLightContrast(frame) {
 }
 const renderer = new LightRenderer($('light'), { gridCanvas: $('grid'), onFrame:frame => {
   updateLightContrast(frame);
+  updateCover(frame);
   hardware?.offer(frame);
 } });
 hardware = setupHardware(renderer);
@@ -31,6 +40,9 @@ renderer.setReducedMotion(motionQuery.matches);
 motionQuery.addEventListener('change', e => renderer.setReducedMotion(e.matches));
 let refreshResearch = () => {}, aiAvailable = false;
 function update(state) {
+  coverIdle = state.phase === 'idle' && state.plan.responseType === 'idle' && state.plan.motionPrimitive === 'hold';
+  document.body.classList.toggle('cover-paused', state.paused);
+  updateCover(renderer.frame);
   $('welcome').hidden = Boolean(state.lastText);
   $('moment').hidden = !state.lastText;
   $('moment').textContent = state.lastText;
@@ -64,7 +76,11 @@ refreshResearch = setupResearch(controller, renderer, { aiAvailable, simulateFai
 controller.emit();
 function count() { $('counter').textContent = `${input.value.length} / 2000`; }
 const speech = setupDinoVoice({
-  onState:state => renderer.setVoiceInput({active:['starting','listening','finishing'].includes(state.phase), level:state.level}),
+  onState:state => {
+    coverVoice = ['starting','listening','finishing'].includes(state.phase);
+    renderer.setVoiceInput({active:coverVoice, level:state.level});
+    updateCover(renderer.frame);
+  },
   onSubmit:text => controller.submit(text, {fromVoice:true})
 });
 $('composer').addEventListener('submit', event => {
@@ -79,7 +95,7 @@ $('composer').addEventListener('submit', event => {
 input.addEventListener('input',count);
 input.addEventListener('keydown',event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); $('composer').requestSubmit(); } });
 for (const example of document.querySelectorAll('[data-example]')) example.addEventListener('click', () => { speech?.cancel(); input.value=example.dataset.example; count(); input.focus({preventScroll:true}); });
-$('clear').addEventListener('click', () => { speech?.off(); controller.reset(); renderer.setGrid(false); $('view').value='diffusion'; $('workshop-note').value=''; input.value=''; count(); input.focus({preventScroll:true}); });
+$('clear').addEventListener('click', () => { speech?.off(); controller.reset(); $('view').value='diffusion'; renderer.setGrid(false); $('workshop-note').value=''; input.value=''; count(); input.focus({preventScroll:true}); });
 $('motion').addEventListener('click', () => controller.setPaused(!controller.paused));
 $('retry').addEventListener('click', () => { speech?.cancel(); if (controller.lastText) void controller.submit(controller.lastText,{retry:true}); });
 // Follow the visible phone viewport without interfering with accessibility zoom.

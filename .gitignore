@@ -17,6 +17,8 @@ light-preview.png
 mixed-emotions-preview.png
 
 # Local research exports, document figures and deployment evidence
+/output/
+/tmp/
 /outputs/
 /deliverables/
 /railway-*.png

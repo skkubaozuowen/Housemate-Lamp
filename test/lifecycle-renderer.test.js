@@ -136,6 +136,8 @@ test('voice listening remains continuous through long speech and exits smoothly 
     const receipt=createPlan('acknowledge',{seed:72});renderer.setPlan(receipt);assert.deepEqual(renderer.frame,listening);
     browser.tick(5010);browser.tick(5250);
     assert.deepEqual(renderer.frame,renderFrame(receipt,240),'voice handoff leaves enough of the 850ms receipt visible');
+    browser.tick(5510);
+    assert.deepEqual(renderer.frame,renderFrame(receipt,500),'the released ring contains no old voice cloud after the handoff');
     assert.equal(browser.queue.size,1);renderer.destroy();
   } finally {browser.restore();}
 });

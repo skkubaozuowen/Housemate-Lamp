@@ -54,14 +54,14 @@ With no key, the page clearly labels **Local demo** and runs the same planner fo
 
 On AI failure the light plays a separate interrupted-return gesture, offers **Retry AI**, and continues with a valid local response. The study drawer includes a no-network failure simulation to exercise this exact presentation path. It is not a timed reminder service.
 
-## Response library · version 3.9
+## Response library · version 3.12.2
 
 The study drawer presents **five exchange signals and six everyday situations**. The same native light compositions are used by AI, local fallback, the matrix preview and USB output. The main layout and voice controls are unchanged.
 
 | ID | Internal name | Signature / ending |
 | --- | --- | --- |
 | B01 | greet | A short, more legible blue-green opening; listening stays available and live voice continues to follow measured volume |
-| B02 | acknowledge | The listening/current glow gathers and pulses once, carrying its colors into processing |
+| B02 | acknowledge | One luminous ball grows, then bursts into an expanding ring; the central ball disappears |
 | B03 | processing | Two softly filled luminous balls split apart and orbit while a real request is pending, then unfold into the situation |
 | B04 | clarify | A soft glow probes sideways, hesitates, returns and tries another direction, then pauses for a continuation |
 | B05 | farewell | A gentle gathering gesture returning to ambient light |
@@ -98,14 +98,24 @@ Between exchanges the lamp is a steady, neutral white field using the same 768-b
 
 All eleven ordinary S01–S06 expressions play for 10–15 seconds, including their finishing motion. Their completion starts a two-second dissolve: the outgoing color fields keep moving while their contrast gradually fades into steady white, without a whole-lamp dimming stage. S01 celebration and S02 support retain the original soft white ground beneath their finishing stars; S02 also retains a faint warm resident glow. Paused time, hidden time and active voice input do not advance the underlying response clock. New speech, reset or a boundary can replace an outgoing fade without a later stale callback restoring it. Kept/declined color preferences remain available for the next expression, while the ordinary between-turn lamp stays white. Explicit manual Hold, color corrections and invited ongoing company retain their separate behavior.
 
+## Six situations interpreted in context · version 3.12
+
+Version 3.12.1 restores the original lilac/blush cover as page-only decoration while the ordinary lamp is idle. It yields to voice and response frames, and stays off in the exact matrix view and manual previews. The USB frame, physical white idle and all response compositions remain unchanged. Pause and reduced-motion settings also apply to the decorative drift.
+
+Ordinary local scene matches are suggestions, even when a familiar word is recognized. The model reads the complete current account and recent conversation before selecting one of the six families and its expression. A birthday combined with loneliness, an acceptance followed by emptiness, or a graduation intertwined with leaving can use S05 without requiring the person to literally say they feel happy. Unnamed complexity keeps the open gradient; supported two- and three-strand compositions retain the model's interpretation rather than a keyword count.
+
+S01 receives good news, positive anticipation and satisfaction; S02 receives difficult feelings, including loneliness and frustration; S03 receives fatigue and its fulfilment variant; S04 offers courage for tension; S05 holds intertwined meanings and feelings; S06 acknowledges ordinary sharing. Simple anticipation with nervousness can remain S04, fatigue with satisfaction can remain S03, and an upcoming date alone does not imply either anxiety or happiness. The model distinguishes current from earlier experience, the speaker from quoted or reported people, and negative wording from negation. Direct lamp controls and boundaries still take precedence, preferences remain authoritative, and scene palettes, degree mapping and finite timing stay in use. Local demo remains a limited fallback rather than contextual AI interpretation.
+
 ## Perceptible degrees within each response · version 3.11
 
 The model now chooses a separate `intensity` from 0 to 1 before tuning the existing composition. Low, medium and strong reference regions provide visible spacing between degrees of the same expression. A small set of family-specific dimensions is anchored to that degree, while secondary geometry, motion, support timing and palette variation retain contextual choices. The interpretation is applied once on the server; saved scenes and manual studies replay their resulting settings without applying it again. Older plans default to .5. Library previews and Local demo retain the reference compositions.
 
+Version 3.11.1 keeps the existing catalog composition and balanced palette as the standard midpoint: only a below-standard interpretation reduces its presence. Active element counts now follow degree without independent model offsets. S02 progresses through one to three waves and two to seven receiving glows, centered on the original two waves and five glows. Its upper size bounds preserve separate waves, and degree no longer increases the relative red weighting. S01 opening ripple counts and S06 acknowledgment counts use the same stable rule; S06 retains its original three-echo standard and increases spatial presence at higher degrees. Rhythm, spacing and continuous geometry retain small contextual variations. Strong listening-only sadness can remain slow without being forced into a sparse response or warm encouragement.
+
 | Family | Main visible degree changes |
 | --- | --- |
 | S01 | Opening size, ripple thickness/count and star size; quiet satisfaction keeps its quiet unfolding |
-| S02 | Wave thickness, occupied area and receiving glows; support remains a separate contextual choice |
+| S02 | Wave/glow counts, thickness, occupied area and glow size within the original violet/red/blue balance; support remains a separate contextual choice |
 | S03 | A broader resting field and slower settling; fulfilment retains its independent warm accent |
 | S04 | A larger receiving and breathing field, with encouragement timing chosen independently |
 | S05 | Broader color presence; layered gradients vary ribbon thickness at the same period, retaining the supported feelings |

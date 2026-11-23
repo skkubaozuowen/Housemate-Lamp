@@ -44,7 +44,9 @@ test('all eleven existing expressions retain byte-identical RGB with missing or 
 test('composition does not alter the five basic signals, voice field, or manual primitives',()=>{
   const basic=[
     ['greet','4b5ca4335e4087e992cb6ca5f1bcfdeb09b79cf2e041bc4f5a41c655f0b408ee'],
-    ['acknowledge','d26683a4e1c37953d7a5fb602bbd103ed884ae9a8abfbad2809a014a9d1ffa8b'],
+    // Reviewed ball-growth / hollow-ring receipt; adaptive scene controls
+    // must still leave the basic signal byte-identical to this baseline.
+    ['acknowledge','a1a7e27ab6771e341cf644196ea89a11e624302e8ac9e3ae8987da2053567b7b'],
     ['processing','3dd3105c825219e40b9b004ebdd1b8c2ef0a76d0ceeca6c1c3146b95bee2d4ac'],
     ['clarify','bb85a3bc040622815c17922216a2ed0fa0d20b7a2ede82bbd0f1c5b8b04867ae'],
     ['farewell','0e5e872433035ea321f3434d0728168eeee11bacfb0b38122fb0ec9cb4374030'],
